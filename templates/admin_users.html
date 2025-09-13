@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Users - HBet 5/50</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%231a1a1a'/><text x='50%' y='50%' dominant-baseline='middle' text-anchor='middle' font-family='Inter, sans-serif' font-size='12' fill='white'>H</text></svg>" />
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Inter Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0d0d0d; /* Deep black background */
+            color: #e0e0e0; /* Soft white text */
+            margin: 0;
+            padding: 0;
+            overflow-x: hidden; /* Prevent horizontal scroll */
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 1.5rem; /* Consistent padding */
+        }
+        .container {
+            max-width: 1200px; /* Max width for content */
+            margin: 0 auto;
+            padding: 1.5rem;
+        }
+        /* Card/Section Background */
+        .main-content-card {
+            background-color: #1a1a1a; /* Darker card background */
+            border-radius: 0.75rem; /* rounded-xl */
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.6); /* More pronounced shadow */
+            padding: 2.5rem; /* Increased padding for more space */
+            margin-bottom: 2rem; /* Space before footer */
+            width: 100%; /* Ensure it takes full width of its container */
+        }
+
+        /* Table styling */
+        .table-container {
+            background-color: #1a1a1a; /* Darker background for tables */
+            border-radius: 0.75rem;
+            box-shadow: 0 6px 15px rgba(0, 0, 0, 0.4); /* Softer shadow */
+            overflow-x: auto; /* Ensure horizontal scrolling for tables on small screens */
+            border: 1px solid #333; /* Subtle border */
+        }
+        .table-container thead {
+            background-color: #2a2a2a; /* Even darker for table header */
+            color: #c0c0c0; /* Lighter text for headers */
+            text-transform: uppercase;
+            font-size: 0.9rem; /* Slightly larger text */
+            text-align: left;
+            font-weight: 600;
+        }
+        .table-container th, .table-container td {
+            padding: 1rem; /* Increased padding */
+        }
+        .table-container tbody tr {
+            border-top: 1px solid #3a3a3a; /* Darker border for rows */
+            transition: background-color 0.15s ease-in-out;
+        }
+        .table-container tbody tr:hover {
+            background-color: #0a0a0a; /* Subtle hover effect */
+        }
+
+        /* Flash messages */
+        .flash-message {
+            padding: 1.25rem; /* Larger padding */
+            margin-bottom: 1.5rem; /* More space below */
+            border-radius: 0.75rem; /* More rounded */
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: 600;
+            color: #fff;
+            box-shadow: 0 0 15px rgba(0,0,0,0.6); /* Deeper shadow */
+            border: 1px solid; /* Add border for definition */
+        }
+        .flash-message.success {
+            background-color: #16a34a; /* Darker green */
+            border-color: #22c55e;
+            box-shadow: 0 0 12px #16a34a;
+        }
+        .flash-message.error {
+            background-color: #b91c1c; /* Darker red */
+            border-color: #ef4444;
+            box-shadow: 0 0 12px #b91c1c;
+        }
+        .flash-message.info {
+            background-color: #2563eb; /* Darker blue */
+            border-color: #3b82f6;
+            box-shadow: 0 0 12px #2563eb;
+        }
+        .flash-message .close-button {
+            background: none;
+            border: none;
+            color: inherit;
+            font-size: 1.8rem; /* Larger close button */
+            cursor: pointer;
+            margin-left: 1.5rem;
+            line-height: 1;
+            opacity: 0.8;
+            transition: opacity 0.2s;
+        }
+        .flash-message .close-button:hover {
+            opacity: 1;
+        }
+
+        /* Specific text colors for dark theme context */
+        h1, h2, h3 { color: #ffffff; } /* Main headings, important text */
+        .text-gray-400 { color: #b0b0b0; } /* Subheadings, labels */
+        .text-gray-500 { color: #808080; } /* Footer text */
+        .text-gray-300 { color: #d0d0d0; } /* General table text, lighter secondary text */
+        .text-indigo-400 { color: #a78bfa; } /* Nav links - purple-400 */
+        .text-yellow-600 { background-color: #d97706; } /* Button yellow */
+        .text-red-600 { background-color: #dc2626; } /* Button red */
+        .bg-indigo-600 { background-color: #4f46e5; } /* Button indigo */
+        
+        /* Input field specific styling for dark theme */
+        input[type="text"] {
+            background-color: #2a2a2a; /* Darker input background */
+            border: 1px solid #444; /* Darker border */
+            color: #e0e0e0; /* Light text color */
+            padding: 0.75rem 1rem; /* Adjust padding */
+            border-radius: 0.5rem; /* Slightly less rounded */
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        input[type="text"]:focus {
+            border-color: #63b3ed; /* Light blue border on focus */
+            box-shadow: 0 0 0 3px rgba(99, 179, 237, 0.3); /* Blue glow on focus */
+            background-color: #333; /* Slightly lighter on focus */
+        }
+
+        /* General button styles for the new theme */
+        .btn {
+            @apply py-2 px-4 rounded-lg font-semibold shadow-md transition duration-300 ease-in-out;
+        }
+        .btn-primary {
+            @apply bg-indigo-600 text-white hover:bg-indigo-700;
+        }
+        .btn-secondary {
+            @apply bg-gray-700 text-gray-100 hover:bg-gray-600;
+        }
+        .btn-danger {
+            @apply bg-red-600 text-white hover:bg-red-700;
+        }
+        .btn-success {
+            @apply bg-green-600 text-white hover:bg-green-700;
+        }
+        .btn-info {
+            @apply bg-blue-600 text-white hover:bg-blue-700;
+        }
+        .btn-yellow { /* Custom yellow button for toggle sub */
+            @apply bg-yellow-600 text-white hover:bg-yellow-700;
+        }
+    </style>
+</head>
+<body class="bg-black min-h-screen flex flex-col items-center p-4">
+    <div class="max-w-6xl w-full flex flex-col space-y-10">
+        <!-- Header -->
+        <header class="text-center mb-10">
+            <h1 class="text-5xl font-extrabold text-white tracking-wide">
+                👑 Users
+            </h1>
+            <p class="text-gray-400 text-lg mt-1">Manage Users</p>
+            <nav class="mt-4">
+                <ul class="flex flex-wrap justify-center space-x-4 sm:space-x-6 text-indigo-400 text-lg font-semibold">
+                    <li><a href="{{ url_for('index') }}" class="hover:text-indigo-300 transition">Home</a></li>
+                    {% if logged_in %}
+                        <li><a href="{{ url_for('backtest_results_page') }}" class="hover:text-indigo-300 transition">Backtest Results</a></li>
+                        {% if is_admin %}
+                            <li><a href="{{ url_for('admin_panel') }}" class="hover:text-indigo-300 transition">Admin Panel</a></li>
+                            <li><a href="{{ url_for('admin_users') }}" class="hover:text-indigo-300 transition text-white bg-indigo-600 rounded-md px-3 py-1">Manage Users</a></li>
+                            <li><a href="{{ url_for('admin_banner_settings') }}" class="hover:text-indigo-300 transition">Banner Settings</a></li>
+                            <li><a href="{{ url_for('set_admin_claim') }}" class="hover:text-indigo-300 transition">Set Admin Claim</a></li>
+                            <li>
+                                <form action="{{ url_for('force_prediction_update') }}" method="POST" class="inline-block">
+                                    <button type="submit" class="text-yellow-400 hover:text-yellow-300 transition bg-gray-800 px-3 py-1 rounded-md">Force Prediction Update</button>
+                                </form>
+                            </li>
+                        {% endif %}
+                        <li><a href="{{ url_for('telegram_settings') }}" class="hover:text-indigo-300 transition">Telegram Settings</a></li>
+                        <li><a href="{{ url_for('logout') }}" class="hover:text-indigo-300 transition">Logout</a></li>
+                    {% else %}
+                        <li><a href="{{ url_for('login') }}" class="hover:text-indigo-300 transition">Login</a></li>
+                        <li><a href="{{ url_for('register') }}" class="hover:text-indigo-300 transition">Register</a></li>
+                    {% endif %}
+                </ul>
+            </nav>
+        </header>
+
+        <main class="main-content-card">
+            <!-- Flash Messages -->
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    <div class="mb-6">
+                        {% for category, message in messages %}
+                            <div class="flash-message {{ category }}">
+                                <span>{{ message }}</span>
+                                <button type="button" class="close-button">&times;</button>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            {% endwith %}
+
+            <section>
+                <h2 class="text-3xl font-bold text-white mb-6">📋 Registered Users</h2>
+                {% if users %}
+                    <div class="overflow-x-auto table-container">
+                        <table class="w-full text-sm text-left">
+                            <thead class="bg-gray-800 text-gray-400 border-b border-gray-700">
+                                <tr>
+                                    <th class="p-3">UID</th>
+                                    <th class="p-3">Email</th>
+                                    <th class="p-3">Subscribed</th>
+                                    <th class="p-3">Telegram Chat ID</th>
+                                    <th class="p-3">Admin</th>
+                                    <th class="p-3">Created</th>
+                                    <th class="p-3">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for user in users %}
+                                <tr class="border-t border-gray-800 hover:bg-gray-800 transition">
+                                    <td class="p-3 text-gray-300 font-mono">{{ user.uid }}</td>
+                                    <td class="p-3 text-indigo-400 font-medium">{{ user.email }}</td>
+                                    <td class="p-3">
+                                        <span class="px-2 py-1 text-xs font-medium rounded-full
+                                            {% if user.is_subscribed %} bg-green-600 text-white
+                                            {% else %} bg-red-600 text-white
+                                            {% endif %}">
+                                            {{ 'Yes' if user.is_subscribed else 'No' }}
+                                        </span>
+                                    </td>
+                                    <td class="p-3 text-gray-300">{{ user.telegram_chat_id if user.telegram_chat_id else 'N/A' }}</td>
+                                    <td class="p-3">
+                                        <span class="px-2 py-1 text-xs font-medium rounded-full
+                                            {% if user.is_admin %} bg-blue-600 text-white
+                                            {% else %} bg-gray-600 text-white
+                                            {% endif %}">
+                                            {{ 'Yes' if user.is_admin else 'No' }}
+                                        </span>
+                                    </td>
+                                    <td class="p-3 text-gray-300">
+                                        {% if user.created_at %}
+                                            {{ user.created_at.strftime('%Y-%m-%d %H:%M') }}
+                                        {% else %}
+                                            N/A
+                                        {% endif %}
+                                    </td>
+                                    <td class="p-3 flex flex-col space-y-2 sm:flex-row sm:space-x-2 sm:space-y-0">
+                                        <a href="{{ url_for('admin_view_as', uid=user.uid) }}" class="btn btn-info text-xs py-1 px-3">View as User</a>
+                                        <form method="POST" action="{{ url_for('admin_toggle_subscription', uid=user.uid) }}">
+                                            <button type="submit" class="btn {% if user.is_subscribed %}btn-danger{% else %}btn-success{% endif %} text-xs py-1 px-3">
+                                                {% if user.is_subscribed %}
+                                                    Unsubscribe
+                                                {% else %}
+                                                    Subscribe
+                                                {% endif %}
+                                            </button>
+                                        </form>
+                                        <form method="POST" action="{{ url_for('set_admin_claim') }}">
+                                            <input type="hidden" name="email" value="{{ user.email }}">
+                                            <button type="submit" name="action" value="{% if user.is_admin %}revoke{% else %}grant{% endif %}"
+                                                    class="btn {% if user.is_admin %}btn-info{% else %}btn-primary{% endif %} text-xs py-1 px-3">
+                                                {% if user.is_admin %}
+                                                    Revoke Admin
+                                                {% else %}
+                                                    Grant Admin
+                                                {% endif %}
+                                            </button>
+                                        </form>
+                                        <button type="button" class="btn btn-danger text-xs py-1 px-3"
+                                                onclick="showDeleteConfirmation('{{ user.uid }}', '{{ user.email }}');">
+                                            Delete
+                                        </button>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <p class="text-gray-400 text-center">No users registered yet.</p>
+                {% endif %}
+            </section>
+        </main>
+
+        <!-- Footer -->
+        <footer
+          class="text-center text-gray-500 text-sm mt-12 p-6 bg-[#111] rounded-xl shadow-inner select-none w-full max-w-6xl"
+        >
+          <p>
+            &copy;
+            {{ '2025' if now and now.year == 2025 else ('2025-' + now.year|string if now else '2025') }}
+            HBet. All rights reserved.</p>
+          <p>Disclaimer: This tool is for entertainment and informational purposes only. Lottery results are random.</p>
+        </footer>
+    </div>
+
+    <!-- Custom Confirmation Modal for Delete User -->
+    <div id="deleteConfirmationModal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 hidden">
+        <div class="bg-gray-800 p-8 rounded-lg shadow-xl text-white max-w-sm w-full">
+            <h3 class="text-xl font-bold mb-4">Confirm Deletion</h3>
+            <p class="mb-6">Are you sure you want to delete user <span id="modalUserEmail" class="font-semibold text-red-400"></span>?</p>
+            <div class="flex justify-end space-x-4">
+                <button type="button" class="btn btn-secondary" onclick="hideDeleteConfirmation()">Cancel</button>
+                <form id="deleteUserForm" method="POST" action="">
+                    <input type="hidden" name="uid" id="modalUserId">
+                    <button type="submit" class="btn btn-danger">Delete</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Flash messages close buttons
+        document.addEventListener('DOMContentLoaded', () => {
+            const closeButtons = document.querySelectorAll('.flash-message .close-button');
+            closeButtons.forEach((btn) =>
+                btn.addEventListener('click', () => {
+                    btn.closest('.flash-message').remove();
+                })
+            );
+        });
+
+        // Custom delete confirmation modal functions
+        function showDeleteConfirmation(uid, email) {
+            document.getElementById('modalUserEmail').textContent = email;
+            document.getElementById('modalUserId').value = uid;
+            // Set the form action dynamically
+            document.getElementById('deleteUserForm').action = "{{ url_for('admin_delete_user', uid='TEMP_UID') }}".replace('TEMP_UID', uid);
+            document.getElementById('deleteConfirmationModal').classList.remove('hidden');
+        }
+
+        function hideDeleteConfirmation() {
+            document.getElementById('deleteConfirmationModal').classList.add('hidden');
+        }
+    </script>
+</body>
+</html>
