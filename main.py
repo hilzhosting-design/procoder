@@ -245,7 +245,7 @@ def store_draws_to_firestore(draws_data):
                 payload = {
                     'main1': mains[0], 'main2': mains[1], 'main3': mains[2], 
                     'main4': mains[3], 'main5': mains[4], 'main6': mains[5],
-                    'bonus': bonus, 'draw_date': draw_date_str, 
+                    'booster': bonus, 'draw_date': draw_date_str, 
                     'draw_type': draw_type, 'timestamp': timestamp
                 }
                 draws_collection.add(payload)
@@ -273,7 +273,7 @@ def get_historical_draws_from_firestore(limit=None, history_window_days=None):
                 continue
             
             mains = [data.get(f'main{i}') for i in range(1, 7)] 
-            bonus = data.get('bonus')
+            bonus = data.get('booster')
             
             if any(m is None for m in mains) or bonus is None:
                 logging.warning(f"Skipping draw doc {doc.id}: missing main numbers or bonus.")
@@ -522,7 +522,7 @@ def index():
             live_prediction_history.append(PredictionResult(
                 normalize_to_harare_time(data.get('target_draw_time')), 
                 data.get('strategy_used'), 
-                data.get('bonus'), 
+                data.get('booster'), 
                 data.get('prediction'), 
                 data.get('actual_mains'), 
                 data.get('actual_bonus'), # Use actual_bonus
