@@ -262,20 +262,30 @@ def get_historical_draws_from_firestore(limit=None, history_window_days=None):
         query = query.where(filter=FieldFilter('timestamp', '>=', start_date_for_window))
     if limit: query = query.limit(limit)
     draws = []
+    skipped_count = 0  #<-- Add a counter
     try:
         for doc in query.stream():
             data = doc.to_dict()
             timestamp_dt = normalize_to_harare_time(data.get('timestamp'))
-            if not timestamp_dt: continue
+            if not timestamp_dt:
+                logging.warning(f"Skipping draw doc {doc.id}: missing or invalid timestamp.")
+                skipped_count += 1
+                continue
             
-            mains = [data.get(f'main{i}') for i in range(1, 7)] # Fetch all 6 main numbers
-            bonus = data.get('bonus') # Fetch single bonus
+            mains = [data.get(f'main{i}') for i in range(1, 7)] 
+            bonus = data.get('bonus')
             
-            if any(m is None for m in mains) or bonus is None: continue
+            if any(m is None for m in mains) or bonus is None:
+                logging.warning(f"Skipping draw doc {doc.id}: missing main numbers or bonus.")
+                skipped_count += 1
+                continue
             
-            # Return a tuple with a single bonus
             draws.append((timestamp_dt, sorted(mains), bonus, data.get('draw_type', 'Unknown')))
     except Exception as e: logging.error(f"Failed to fetch historical draws: {e}")
+    
+    if skipped_count > 0: #<-- Add a summary log
+        logging.warning(f"Total draws retrieved: {len(draws)}. Total draws skipped due to incomplete data: {skipped_count}.")
+        
     return draws
 
 def get_latest_actual_draw():
