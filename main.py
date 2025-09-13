@@ -920,10 +920,10 @@ def scrape_and_process_draws_job():
         prediction_payload = {
             'target_draw_time': get_next_target_draw_time(datetime.now(harare_tz)), 
             'strategy_used': live_prediction_result['strategy_used'], 
-            'bonus': historical_draws[0][2], # Get the single bonus from the latest draw
+            'booster': historical_draws[0][2], # Get the single bonus from the latest draw
             'prediction': live_prediction_result['prediction'], 
             'actual_mains': [], 
-            'actual_bonus': None, 
+            'actual_booster': None, 
             'hits': None, 
             'timestamp_generated': firestore.SERVER_TIMESTAMP
         }
@@ -964,7 +964,7 @@ def check_and_update_prediction_hits_job():
     # We find the prediction whose target_draw_time matches the actual draw time.
     pred_doc_id = latest_draw_time.strftime('%Y-%m-%d_%H%M')
     
-    update_payload = {'actual_mains': latest_mains, 'actual_bonus': bonus} # Use 'actual_bonus'
+    update_payload = {'actual_mains': latest_mains, 'actual_booster': bonus} # Use 'actual_bonus'
     
     public_pred_ref = get_public_prediction_history_ref().document(pred_doc_id)
     public_pred_doc = public_pred_ref.get()
@@ -992,7 +992,7 @@ def precompute_successful_bonuses_job():
     for result in backtest_results:
         # Corrected logic for single bonus
         if result.get('hits', 0) >= 3:
-            bonus_num = result.get('bonus')
+            bonus_num = result.get('booster')
             if bonus_num:
                 successful_bonuses.add(bonus_num)
 
