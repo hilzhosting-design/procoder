@@ -843,7 +843,7 @@ def backtest_strategy_job():
                 hits = len(set(predicted_mains).intersection(set(target_mains)))
                 
                 # Corrected results payload for single bonus
-                results.append({'target_draw_time': target_timestamp.isoformat(), 'draw_date': target_timestamp.strftime('%Y-%m-%d'), 'draw_type': target_draw_type, 'strategy_used': 'ml_walk_forward', 'bonus': bonus, 'prediction': predicted_mains, 'actual_mains': target_mains, 'actual_bonus': target_bonus, 'hits': hits})
+                results.append({'target_draw_time': target_timestamp.isoformat(), 'draw_date': target_timestamp.strftime('%Y-%m-%d'), 'draw_type': target_draw_type, 'strategy_used': 'ml_walk_forward', 'booster': bonus, 'prediction': predicted_mains, 'actual_booster': target_mains, 'actual_bonus': target_bonus, 'hits': hits})
                 
                 progress = int(((i - initial_training_size + 1) / total_predictions) * 100)
                 if progress % 10 == 0:
