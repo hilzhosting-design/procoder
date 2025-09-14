@@ -383,23 +383,27 @@ def train_and_save_model():
         return False, msg
 
 def load_model():
+    """Loads the ML model from Firestore and returns it."""
     try:
         model_doc_ref = db.collection('artifacts').document(get_app_id_for_firestore()).collection('ml_models').document('prediction_model')
         model_doc = model_doc_ref.get()
         if not model_doc.exists:
-            logging.warning("Model document not found in Firestore.")
+            # DEBUGGING: Added a clear log message for when the model document is missing
+            logging.warning("[DEBUG-PREDICTION] Model document not found in Firestore. A model must be trained first.")
             return None
-            
+        
+        logging.debug("[DEBUG-PREDICTION] Found model document in Firestore. Proceeding to load.")
         base64_encoded_model = model_doc.to_dict()['model_data_base64']
         decoded_model_bytes = base64.b64decode(base64_encoded_model)
         
         model_file = io.BytesIO(decoded_model_bytes)
         model = joblib.load(model_file)
         
-        logging.info("ML model successfully loaded from Firestore.")
+        logging.info("[DEBUG-PREDICTION] ML model successfully loaded from Firestore.")
         return model
     except Exception as e:
-        logging.error(f"Failed to load ML model from Firestore: {e}", exc_info=True)
+        # DEBUGGING: Log any error during the loading/decoding process
+        logging.error(f"[DEBUG-PREDICTION] Failed to load ML model from Firestore: {e}", exc_info=True)
         return None
 
 # --- Prediction Strategies ---
@@ -408,14 +412,16 @@ def predict_strategy(base_mains, bonus, historical_draws, target_size=4):
     Generates a prediction using only the trained machine learning model.
     If the model is not available, this function will fail and return None.
     """
+    logging.debug("[DEBUG-PREDICTION] Attempting to load model for prediction.")
     model = load_model()
     
     # MODIFIED: Fail if model is not available, do not use a fallback.
     if model is None:
-        logging.error("ML model not available. Cannot generate prediction without a trained model.")
+        # DEBUGGING: Critical log message if model loading fails. This is a common reason for prediction failure.
+        logging.error("[DEBUG-PREDICTION] ML model is NOT available. Cannot generate prediction. Check if model has been trained and saved correctly.")
         return None # Return None to indicate failure
     
-    logging.info("Using trained ML model from Firestore for prediction.")
+    logging.info("[DEBUG-PREDICTION] Using trained ML model from Firestore for prediction.")
     hot_pool, overdue_pool, pair_pool = get_hot_numbers(historical_draws), get_overdue_numbers(historical_draws), get_strongest_pairs(historical_draws)
     bonus_pool = set(super_hybrid_pool(bonus))
     
@@ -431,25 +437,37 @@ def predict_strategy(base_mains, bonus, historical_draws, target_size=4):
     df_pred = pd.DataFrame(prediction_features)
     probabilities = model.predict_proba(df_pred)[:, 1]
     prob_series = pd.Series(probabilities, index=range(1, 51))
-    return sorted(prob_series.nlargest(target_size).index.tolist())
+    prediction_result = sorted(prob_series.nlargest(target_size).index.tolist())
+    logging.debug(f"[DEBUG-PREDICTION] Generated prediction: {prediction_result}")
+    return prediction_result
 
 def generate_live_prediction(historical_draws):
-    if not historical_draws or len(historical_draws) < 3: return None
+    """Generates the main prediction result dictionary."""
+    # DEBUGGING: Check if there's enough data to even start.
+    if not historical_draws or len(historical_draws) < 3:
+        logging.warning(f"[DEBUG-PREDICTION] Not enough historical draws to generate a prediction. Need at least 3, got {len(historical_draws)}.")
+        return None
+    
     latest_draw = historical_draws[0]
+    logging.debug(f"[DEBUG-PREDICTION] Generating prediction based on the latest draw: {latest_draw}")
     
     # Unpack single bonus
     base_mains, bonus = latest_draw[1], latest_draw[2]
+    # Call the strategy to get the numbers
     prediction = predict_strategy(base_mains, bonus, historical_draws[1:])
     
     # MODIFIED: If predict_strategy failed (returned None), we can't proceed.
     if prediction is None:
-        logging.error("Prediction returned None from predict_strategy. Aborting.")
+        # DEBUGGING: This log indicates that the model-based strategy failed.
+        logging.error("[DEBUG-PREDICTION] Prediction returned None from predict_strategy. Aborting live prediction generation.")
         return None
 
     # MODIFIED: Since the fallback is removed, the strategy is always ML.
     strategy_name = "ml_random_forest_firestore"
     
-    return {'strategy_used': strategy_name, 'prediction': prediction}
+    result = {'strategy_used': strategy_name, 'prediction': prediction}
+    logging.info(f"[DEBUG-PREDICTION] Successfully generated live prediction: {result}")
+    return result
 
 # --- Data Class for UI ---
 class PredictionResult:
@@ -908,15 +926,28 @@ HISTORY_WINDOW_DAYS = 90
 
 def scrape_and_process_draws_job():
     logging.info("--- JOB START: Scrape and Process Draws ---")
+    
+    # DEBUGGING STEP 1: Check if scraping works
     draws_data, error = fetch_draws_from_website()
     if error:
-        logging.error(f"Scraping job failed: {error}")
+        logging.error(f"[DEBUG-PREDICTION] Step 1 FAILED: Scraping job failed with error: {error}")
         return
-    store_draws_to_firestore(draws_data)
+    logging.info(f"[DEBUG-PREDICTION] Step 1 SUCCESS: Fetched {len(draws_data)} draws from website.")
+
+    # DEBUGGING STEP 2: Check if draws are stored
+    stored_count = store_draws_to_firestore(draws_data)
+    logging.info(f"[DEBUG-PREDICTION] Step 2 COMPLETE: Stored {stored_count} new draws to Firestore.")
+    
+    # DEBUGGING STEP 3: Check if historical data can be retrieved
     historical_draws = get_historical_draws_from_firestore(history_window_days=HISTORY_WINDOW_DAYS)
+    logging.info(f"[DEBUG-PREDICTION] Step 3 COMPLETE: Retrieved {len(historical_draws)} historical draws for prediction.")
+
+    # DEBUGGING STEP 4: Attempt to generate the prediction
     live_prediction_result = generate_live_prediction(historical_draws)
+    
+    # DEBUGGING STEP 5: Check the result and save to Firestore
     if live_prediction_result:
-        # Corrected payload for single bonus
+        logging.info("[DEBUG-PREDICTION] Step 4 SUCCESS: Prediction generated.")
         prediction_payload = {
             'target_draw_time': get_next_target_draw_time(datetime.now(harare_tz)), 
             'strategy_used': live_prediction_result['strategy_used'], 
@@ -927,15 +958,25 @@ def scrape_and_process_draws_job():
             'hits': None, 
             'timestamp_generated': firestore.SERVER_TIMESTAMP
         }
+        
         try:
             prediction_doc_id = prediction_payload['target_draw_time'].strftime('%Y-%m-%d_%H%M')
+            # DEBUGGING: Log the payload just before saving
+            logging.debug(f"[DEBUG-PREDICTION] Attempting to save prediction payload to doc '{prediction_doc_id}': {prediction_payload}")
+            
             get_public_prediction_history_ref().document(prediction_doc_id).set(prediction_payload)
             get_public_prediction_doc_ref().set(prediction_payload, merge=True)
-            logging.info(f"Saved new prediction for {prediction_doc_id}.")
-        except Exception as e: logging.error(f"Failed to save public prediction: {e}")
+            
+            logging.info(f"[DEBUG-PREDICTION] Step 5 SUCCESS: Saved new prediction for {prediction_doc_id}.")
+        except Exception as e:
+            logging.error(f"[DEBUG-PREDICTION] Step 5 FAILED: Failed to save public prediction to Firestore: {e}", exc_info=True)
+            return # Stop execution if saving fails
     else:
-        logging.error("Failed to generate live prediction (likely due to missing ML model).")
-        return
+        # This is the critical failure log. If you see this, the problem is in the ML model loading or prediction logic.
+        logging.error("[DEBUG-PREDICTION] Step 4 & 5 FAILED: Failed to generate live prediction. The result was None. No document will be created.")
+        return # Stop execution because there's nothing to save
+
+    # These jobs run only if the prediction was successfully created
     update_all_user_predictions_job()
     check_and_update_prediction_hits_job()
     logging.info("--- JOB END: Scrape and Process Draws ---")
