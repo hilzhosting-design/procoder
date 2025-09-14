@@ -182,10 +182,11 @@ def fetch_draws_from_website():
         try:
             response = requests.get(UK_49S_LUNCHTIME_URL, timeout=15, headers=headers)
             response.raise_for_status()
-            soup = BeautifulSoup(response.text, "html.parser")
-            
+
+            logging.debug(f"[DEBUG-HTML] Received HTML content starts with: {response.text[:1000]}")            soup = BeautifulSoup(response.text, "html.parser")
             
             results_table_body = soup.select_one("table.responsive-table tbody") 
+            
             if not results_table_body:
                 logging.warning("Could not find historical results table body.")
                 time.sleep(5)
