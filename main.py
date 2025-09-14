@@ -181,14 +181,15 @@ def fetch_draws_from_website():
     retries = 3
     for attempt in range(retries):
         try:
-            
-            # THIS IS THE CORRECTED LINE
-            response = requests.get(UK_49S_LUNCHTIME_URL, timeout=15, headers=headers)
+            # THIS IS THE CORRECTED CODE
+            response = requests.get(UK_4S_LUNCHTIME_URL, timeout=15, headers=headers)
             response.raise_for_status()
 
+            # The new debug line is on its own line
             logging.debug(f"[DEBUG-HTML] Received HTML content starts with: {response.text[:1000]}")
 
-            soup = BeautifulSoup(response.text, "html.parser")            
+            # The original soup line is on the next line
+            soup = BeautifulSoup(response.text, "html.parser")              
             
             # Find the main historical results table body
             results_table_body = soup.select_one('div.past-results-table-container table tbody')
