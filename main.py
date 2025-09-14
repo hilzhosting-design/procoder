@@ -184,7 +184,8 @@ def fetch_draws_from_website():
             response.raise_for_status()
             soup = BeautifulSoup(response.text, "html.parser")
             
-            results_table_body = soup.select_one("div.card.results-card tbody")
+            
+            results_table_body = soup.select_one("table.responsive-table tbody") 
             if not results_table_body:
                 logging.warning("Could not find historical results table body.")
                 time.sleep(5)
