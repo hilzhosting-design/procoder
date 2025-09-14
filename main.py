@@ -180,12 +180,17 @@ def fetch_draws_from_website():
     retries = 3
     for attempt in range(retries):
         try:
-            response = requests.get(UK_49S_LUNCHTIME_URL, timeout=15, headers=headers)
+            
+            # THIS IS THE CORRECTED CODE
+            response = requests.get(UK_4S_LUNCHTIME_URL, timeout=15, headers=headers)
             response.raise_for_status()
 
-            logging.debug(f"[DEBUG-HTML] Received HTML content starts with: {response.text[:1000]}")            soup = BeautifulSoup(response.text, "html.parser")
-            
-            results_table_body = soup.select_one("table.responsive-table tbody") 
+            # The new debug line is on its own line
+            logging.debug(f"[DEBUG-HTML] Received HTML content starts with: {response.text[:1000]}")
+
+            # The original soup line is on the next line
+            soup = BeautifulSoup(response.text, "html.parser")            
+
             
             if not results_table_body:
                 logging.warning("Could not find historical results table body.")
