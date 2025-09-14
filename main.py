@@ -174,6 +174,7 @@ def send_telegram_message(message, chat_id):
 # --- Web Scraping and Data Processing ---
 UK_49S_LUNCHTIME_URL = "https://za.lottonumbers.com/uk-49s-lunchtime/past-results"
 
+
 def fetch_draws_from_website():
     """Fetches UK 49s Lunchtime draw results from za.lottonumbers.com."""
     headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/536'}
@@ -181,16 +182,16 @@ def fetch_draws_from_website():
     for attempt in range(retries):
         try:
             
-            # THIS IS THE CORRECTED CODE
+            # THIS IS THE CORRECTED LINE
             response = requests.get(UK_49S_LUNCHTIME_URL, timeout=15, headers=headers)
             response.raise_for_status()
 
-            # The new debug line is on its own line
             logging.debug(f"[DEBUG-HTML] Received HTML content starts with: {response.text[:1000]}")
 
-            # The original soup line is on the next line
             soup = BeautifulSoup(response.text, "html.parser")            
-
+            
+            # Find the main historical results table body
+            results_table_body = soup.select_one('div.past-results-table-container table tbody')
             
             if not results_table_body:
                 logging.warning("Could not find historical results table body.")
