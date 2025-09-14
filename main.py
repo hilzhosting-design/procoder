@@ -174,74 +174,81 @@ def send_telegram_message(message, chat_id):
 # --- Web Scraping and Data Processing ---
 UK_49S_LUNCHTIME_URL = "https://za.lottonumbers.com/uk-49s-lunchtime/past-results"
 
-def fetch_draws_from_website():
-    """Fetches UK 49s Lunchtime draw results from za.lottonumbers.com."""
-    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/536'}
-    retries = 3
-    for attempt in range(retries):
-        try:
-            response = requests.get(UK_49S_LUNCHTIME_URL, timeout=15, headers=headers)
-            response.raise_for_status()
-            soup = BeautifulSoup(response.text, "html.parser")
-            
-            # Corrected selector to find the table body
-            results_table_body = soup.select_one('div.past-results-table-container table tbody')
+import logging
+from datetime import datetime
+import requests
+from bs4 import BeautifulSoup
 
-            if not results_table_body:
-                logging.warning("Could not find historical results table body.")
-                time.sleep(5)
+def fetch_draws_from_website():
+    """
+    Scrapes the historical UK 49s Lunchtime draws from the specified website.
+    """
+    url = "https://za.lottonumbers.com/uk-49s-lunchtime/past-results"
+    
+    try:
+        logging.info(f"Starting to scrape URL: {url}")
+        
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+        
+        response = requests.get(url, headers=headers, timeout=10)
+        response.raise_for_status()
+        
+        soup = BeautifulSoup(response.text, 'html.parser')
+        
+        # Correctly find the tbody based on the HTML provided
+        results_table_body = soup.find('tbody')
+        
+        if not results_table_body:
+            logging.warning("Could not find historical results table body.")
+            return []
+            
+        historical_draws = []
+        rows = results_table_body.find_all('tr')
+        
+        for row in rows:
+            try:
+                # Extract date from the td with class 'date-row'
+                date_str = row.find('td', class_='date-row').text.strip()
+                # Parse the date string into a datetime object
+                draw_date = datetime.strptime(date_str, '%A %dth %B %Y')
+            except (AttributeError, ValueError) as e:
+                logging.warning(f"Skipping row due to date parsing error: {e}")
                 continue
 
-            draws = []
-            for row in results_table_body.find_all('tr'):
-                try:
-                    # --- NEW LOGIC FOR PARSING THE DATE ---
-                    date_cell = row.select_one('td.date-row')
-                    if not date_cell:
-                        continue
-                    
-                    # Clean the date string (e.g., "Saturday 13th September 2025")
-                    date_str_raw = date_cell.get_text(strip=True)
-                    # Remove ordinal suffixes like 'st', 'nd', 'rd', 'th'
-                    date_str_clean = re.sub(r'(\d+)(st|nd|rd|th)', r'\1', date_str_raw)
-                    
-                    # Parse the date string and add the approximate draw time
-                    # Assumes "Day, DD Month YYYY" format
-                    date_object = datetime.strptime(date_str_clean, '%A %d %B %Y')
-                    # Set the time to Lunchtime draw (approx. 14:50 Harare time)
-                    timestamp = harare_tz.localize(date_object.replace(hour=14, minute=50))
-
-                    # --- NEW LOGIC FOR PARSING NUMBERS ---
-                    # Select all <li> elements that are main balls (not the bonus ball)
-                    main_numbers_li = row.select('li.ball:not(.bonus-ball)')
-                    main_numbers = [int(li.text) for li in main_numbers_li]
-                    
-                    # Select the single bonus ball <li>
-                    booster_li = row.select_one('li.bonus-ball')
-                    booster_number = int(booster_li.text) if booster_li else None
-
-                    if len(main_numbers) == 6 and booster_number is not None:
-                        draws.append((timestamp, sorted(main_numbers), booster_number, "Lunchtime"))
-
-                except (ValueError, TypeError, AttributeError) as e:
-                    logging.warning(f"Could not parse a draw row: {e} | Row HTML: {row}")
-                    continue
+            # Extract numbers from the ul with class 'balls'
+            numbers_ul = row.find('ul', class_='balls')
             
-            if draws:
-                draws.sort(key=lambda x: x[0], reverse=True)
-                logging.info(f"Successfully parsed {len(draws)} draws from the website.")
-                return draws, None
+            if numbers_ul:
+                # Find all list items with class 'ball'
+                ball_lis = numbers_ul.find_all('li', class_='ball')
+                
+                # The bonus ball has an additional class 'bonus-ball'
+                main_numbers_li = [li for li in ball_lis if 'bonus-ball' not in li.get('class', [])]
+                bonus_number_li = [li for li in ball_lis if 'bonus-ball' in li.get('class', [])]
+                
+                main_numbers = sorted([int(li.text.strip()) for li in main_numbers_li])
+                bonus_number = int(bonus_number_li[0].text.strip()) if bonus_number_li else None
+                
+                if main_numbers and bonus_number is not None:
+                    historical_draws.append({
+                        'date': draw_date,
+                        'mains': main_numbers,
+                        'bonus': bonus_number
+                    })
+                else:
+                    logging.warning(f"Skipping row due to missing numbers: {date_str}")
             
-            return [], "No valid draws were parsed from the website."
+        logging.info(f"Successfully scraped {len(historical_draws)} historical draws.")
+        return historical_draws
 
-        except requests.exceptions.RequestException as e:
-            logging.error(f"Attempt {attempt + 1} failed: {e}")
-            if attempt < retries - 1:
-                time.sleep(5)
-            else:
-                return [], f"Error fetching data after {retries} attempts: {e}."
-    return [], "Unexpected error in fetch_draws_from_website."
-
+    except requests.exceptions.RequestException as e:
+        logging.error(f"HTTP request failed: {e}")
+    except Exception as e:
+        logging.error(f"Unexpected error in fetch_draws_from_website: {e}")
+        
+    return []
 
 def store_draws_to_firestore(draws_data):
     if db is None: return 0
