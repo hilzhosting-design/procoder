@@ -174,11 +174,6 @@ def send_telegram_message(message, chat_id):
 # --- Web Scraping and Data Processing ---
 UK_49S_LUNCHTIME_URL = "https://za.lottonumbers.com/uk-49s-lunchtime/past-results"
 
-import logging
-from datetime import datetime
-import requests
-from bs4 import BeautifulSoup
-
 def fetch_draws_from_website():
     """
     Scrapes the historical UK 49s Lunchtime draws from the specified website.
@@ -197,7 +192,6 @@ def fetch_draws_from_website():
         
         soup = BeautifulSoup(response.text, 'html.parser')
         
-        # Correctly find the tbody based on the HTML provided
         results_table_body = soup.find('tbody')
         
         if not results_table_body:
@@ -209,22 +203,28 @@ def fetch_draws_from_website():
         
         for row in rows:
             try:
-                # Extract date from the td with class 'date-row'
-                date_str = row.find('td', class_='date-row').text.strip()
-                # Parse the date string into a datetime object
-                draw_date = datetime.strptime(date_str, '%A %dth %B %Y')
+                date_td = row.find('td', class_='date-row')
+                if not date_td:
+                    logging.warning("Skipping row due to missing date element.")
+                    continue
+                
+                date_str = date_td.text.strip()
+
+                # FIX: Remove ordinal suffixes before parsing the date
+                date_str = re.sub(r'(\d+)(st|nd|rd|th)', r'\1', date_str)
+                
+                # Parse the cleaned date string
+                draw_date = datetime.strptime(date_str, '%A %d %B %Y')
+            
             except (AttributeError, ValueError) as e:
                 logging.warning(f"Skipping row due to date parsing error: {e}")
                 continue
 
-            # Extract numbers from the ul with class 'balls'
             numbers_ul = row.find('ul', class_='balls')
             
             if numbers_ul:
-                # Find all list items with class 'ball'
                 ball_lis = numbers_ul.find_all('li', class_='ball')
                 
-                # The bonus ball has an additional class 'bonus-ball'
                 main_numbers_li = [li for li in ball_lis if 'bonus-ball' not in li.get('class', [])]
                 bonus_number_li = [li for li in ball_lis if 'bonus-ball' in li.get('class', [])]
                 
