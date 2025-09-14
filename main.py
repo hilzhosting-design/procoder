@@ -174,7 +174,6 @@ def send_telegram_message(message, chat_id):
 # --- Web Scraping and Data Processing ---
 UK_49S_LUNCHTIME_URL = "https://za.lottonumbers.com/uk-49s-lunchtime/past-results"
 
-
 def fetch_draws_from_website():
     """Fetches UK 49s Lunchtime draw results from za.lottonumbers.com."""
     headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/536'}
@@ -183,15 +182,11 @@ def fetch_draws_from_website():
         try:
             response = requests.get(UK_49S_LUNCHTIME_URL, timeout=15, headers=headers)
             response.raise_for_status()
-
-            logging.debug(f"[DEBUG-HTML] Received HTML content starts with: {response.text[:1000]}")
-
             soup = BeautifulSoup(response.text, "html.parser")
-
-            # --- THIS IS THE NEW LINE THAT WAS MISSING ---
-            # It selects the body of the table containing the past results.
-            results_table_body = soup.select_one('div.past-results-table-container table tbody')
             
+            # Corrected selector to find the table body
+            results_table_body = soup.select_one('div.past-results-table-container table tbody')
+
             if not results_table_body:
                 logging.warning("Could not find historical results table body.")
                 time.sleep(5)
@@ -200,31 +195,41 @@ def fetch_draws_from_website():
             draws = []
             for row in results_table_body.find_all('tr'):
                 try:
-                    # Extract timestamp
-                    time_tag = row.select_one('td:nth-child(1) time')
-                    if not time_tag or not time_tag.has_attr('datetime'):
+                    # --- NEW LOGIC FOR PARSING THE DATE ---
+                    date_cell = row.select_one('td.date-row')
+                    if not date_cell:
                         continue
-                    naive_timestamp = datetime.fromisoformat(time_tag['datetime'])
-                    timestamp = harare_tz.localize(naive_timestamp)
+                    
+                    # Clean the date string (e.g., "Saturday 13th September 2025")
+                    date_str_raw = date_cell.get_text(strip=True)
+                    # Remove ordinal suffixes like 'st', 'nd', 'rd', 'th'
+                    date_str_clean = re.sub(r'(\d+)(st|nd|rd|th)', r'\1', date_str_raw)
+                    
+                    # Parse the date string and add the approximate draw time
+                    # Assumes "Day, DD Month YYYY" format
+                    date_object = datetime.strptime(date_str_clean, '%A %d %B %Y')
+                    # Set the time to Lunchtime draw (approx. 14:50 Harare time)
+                    timestamp = harare_tz.localize(date_object.replace(hour=14, minute=50))
 
-                    # Extract main numbers and booster
-                    numbers_cell = row.select_one('td:nth-child(2)')
-                    if not numbers_cell:
-                        continue
-                        
-                    main_numbers = [int(span.text) for span in numbers_cell.select('span.result-ball')]
-                    booster_span = numbers_cell.select_one('span.result-ball-booster')
-                    booster_number = int(booster_span.text) if booster_span else None
+                    # --- NEW LOGIC FOR PARSING NUMBERS ---
+                    # Select all <li> elements that are main balls (not the bonus ball)
+                    main_numbers_li = row.select('li.ball:not(.bonus-ball)')
+                    main_numbers = [int(li.text) for li in main_numbers_li]
+                    
+                    # Select the single bonus ball <li>
+                    booster_li = row.select_one('li.bonus-ball')
+                    booster_number = int(booster_li.text) if booster_li else None
 
                     if len(main_numbers) == 6 and booster_number is not None:
                         draws.append((timestamp, sorted(main_numbers), booster_number, "Lunchtime"))
 
                 except (ValueError, TypeError, AttributeError) as e:
-                    logging.warning(f"Could not parse a draw row: {e}")
+                    logging.warning(f"Could not parse a draw row: {e} | Row HTML: {row}")
                     continue
             
             if draws:
                 draws.sort(key=lambda x: x[0], reverse=True)
+                logging.info(f"Successfully parsed {len(draws)} draws from the website.")
                 return draws, None
             
             return [], "No valid draws were parsed from the website."
@@ -236,6 +241,7 @@ def fetch_draws_from_website():
             else:
                 return [], f"Error fetching data after {retries} attempts: {e}."
     return [], "Unexpected error in fetch_draws_from_website."
+
 
 def store_draws_to_firestore(draws_data):
     if db is None: return 0
