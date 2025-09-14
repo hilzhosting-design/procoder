@@ -181,17 +181,15 @@ def fetch_draws_from_website():
     retries = 3
     for attempt in range(retries):
         try:
-            # THIS IS THE CORRECTED CODE
             response = requests.get(UK_49S_LUNCHTIME_URL, timeout=15, headers=headers)
             response.raise_for_status()
 
-            # The new debug line is on its own line
             logging.debug(f"[DEBUG-HTML] Received HTML content starts with: {response.text[:1000]}")
 
-            # The original soup line is on the next line
-            soup = BeautifulSoup(response.text, "html.parser")              
-            
-            # Find the main historical results table body
+            soup = BeautifulSoup(response.text, "html.parser")
+
+            # --- THIS IS THE NEW LINE THAT WAS MISSING ---
+            # It selects the body of the table containing the past results.
             results_table_body = soup.select_one('div.past-results-table-container table tbody')
             
             if not results_table_body:
@@ -238,7 +236,6 @@ def fetch_draws_from_website():
             else:
                 return [], f"Error fetching data after {retries} attempts: {e}."
     return [], "Unexpected error in fetch_draws_from_website."
-
 
 def store_draws_to_firestore(draws_data):
     if db is None: return 0
