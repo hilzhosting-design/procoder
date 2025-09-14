@@ -182,7 +182,7 @@ def fetch_draws_from_website():
     for attempt in range(retries):
         try:
             # THIS IS THE CORRECTED CODE
-            response = requests.get(UK_4S_LUNCHTIME_URL, timeout=15, headers=headers)
+            response = requests.get(UK_49S_LUNCHTIME_URL, timeout=15, headers=headers)
             response.raise_for_status()
 
             # The new debug line is on its own line
