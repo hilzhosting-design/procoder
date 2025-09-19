@@ -228,11 +228,11 @@ def fetch_draws_from_website():
                 bonus_number = int(bonus_number_li[0].text.strip()) if bonus_number_li else None
                 
                 if main_numbers and bonus_number is not None:
-                    historical_draws.append({
-                        'date': draw_date,
-                        'mains': main_numbers,
-                        'bonus': bonus_number
-                    })
+                    historical_draws.append(
+                        (draw_date, main_numbers, bonus_number, 'UK 49s Lunchtime')   
+                    )
+
+                
                 else:
                     logging.warning(f"Skipping row due to missing numbers: {date_str}")
             
