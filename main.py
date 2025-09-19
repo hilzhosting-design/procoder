@@ -177,6 +177,7 @@ UK_49S_LUNCHTIME_URL = "https://za.lottonumbers.com/uk-49s-lunchtime/past-result
 def fetch_draws_from_website():
     """
     Scrapes the historical UK 49s Lunchtime draws from the specified website.
+    Returns a tuple: (list_of_draws, error_message_or_None).
     """
     url = "https://za.lottonumbers.com/uk-49s-lunchtime/past-results"
     
@@ -191,12 +192,12 @@ def fetch_draws_from_website():
         response.raise_for_status()
         
         soup = BeautifulSoup(response.text, 'html.parser')
-        
         results_table_body = soup.find('tbody')
         
         if not results_table_body:
-            logging.warning("Could not find historical results table body.")
-            return []
+            msg = "Could not find historical results table body."
+            logging.warning(msg)
+            return [], msg
             
         historical_draws = []
         rows = results_table_body.find_all('tr')
@@ -209,11 +210,7 @@ def fetch_draws_from_website():
                     continue
                 
                 date_str = date_td.text.strip()
-
-                # FIX: Remove ordinal suffixes before parsing the date
                 date_str = re.sub(r'(\d+)(st|nd|rd|th)', r'\1', date_str)
-                
-                # Parse the cleaned date string
                 draw_date = datetime.strptime(date_str, '%A %d %B %Y')
             
             except (AttributeError, ValueError) as e:
@@ -224,7 +221,6 @@ def fetch_draws_from_website():
             
             if numbers_ul:
                 ball_lis = numbers_ul.find_all('li', class_='ball')
-                
                 main_numbers_li = [li for li in ball_lis if 'bonus-ball' not in li.get('class', [])]
                 bonus_number_li = [li for li in ball_lis if 'bonus-ball' in li.get('class', [])]
                 
@@ -241,14 +237,19 @@ def fetch_draws_from_website():
                     logging.warning(f"Skipping row due to missing numbers: {date_str}")
             
         logging.info(f"Successfully scraped {len(historical_draws)} historical draws.")
-        return historical_draws
+        # On success, return the data and None for the error
+        return historical_draws, None
 
     except requests.exceptions.RequestException as e:
-        logging.error(f"HTTP request failed: {e}")
+        error_msg = f"HTTP request failed: {e}"
+        logging.error(error_msg)
+        # On failure, return an empty list and the error message
+        return [], error_msg
     except Exception as e:
-        logging.error(f"Unexpected error in fetch_draws_from_website: {e}")
-        
-    return []
+        error_msg = f"Unexpected error in fetch_draws_from_website: {e}"
+        logging.error(error_msg)
+        # On failure, return an empty list and the error message
+        return [], error_msg
 
 def store_draws_to_firestore(draws_data):
     if db is None: return 0
