@@ -252,25 +252,50 @@ def fetch_draws_from_website():
         return [], error_msg
 
 def store_draws_to_firestore(draws_data):
-    if db is None: return 0
+    """
+    Stores a list of draw data to Firestore using an efficient batched write.
+    """
+    if db is None or not draws_data:
+        return 0
+        
     draws_collection = get_draws_collection_ref()
+    batch = db.batch()
     inserted_count = 0
-    # Corrected unpacking for a single bonus number
+    
     for timestamp, mains, bonus, draw_type in draws_data:
         draw_date_str = timestamp.strftime('%Y-%m-%d')
+        
+        # NOTE: This check still requires one read per item. For a high-performance
+        # ingest, you might consider handling duplicates after the write.
+        # However, for 179 items, this is generally acceptable.
         query = draws_collection.where(filter=FieldFilter('draw_date', '==', draw_date_str)).where(filter=FieldFilter('draw_type', '==', draw_type)).limit(1).get()
+        
         if not list(query):
             try:
-                # Corrected payload for a single bonus
                 payload = {
                     'main1': mains[0], 'main2': mains[1], 'main3': mains[2], 
                     'main4': mains[3], 'main5': mains[4], 'main6': mains[5],
                     'booster': bonus, 'draw_date': draw_date_str, 
                     'draw_type': draw_type, 'timestamp': timestamp
                 }
-                draws_collection.add(payload)
+                
+                # Instead of adding directly, add the operation to the batch
+                new_doc_ref = draws_collection.document()
+                batch.set(new_doc_ref, payload)
+                
                 inserted_count += 1
-            except Exception as e: logging.error(f"Failed to add draw to Firestore: {e}")
+            except Exception as e:
+                logging.error(f"Failed to prepare draw for batch: {e}")
+
+    # If there are any new items to insert, commit them all at once
+    if inserted_count > 0:
+        try:
+            batch.commit()
+            logging.info(f"Successfully committed {inserted_count} new draws to Firestore.")
+        except Exception as e:
+            logging.error(f"Failed to commit batch to Firestore: {e}")
+            return 0 # Return 0 on commit failure
+
     return inserted_count
 
 def get_historical_draws_from_firestore(limit=None, history_window_days=None):
