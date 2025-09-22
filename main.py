@@ -1069,7 +1069,8 @@ def update_all_user_predictions_job():
 
 # --------------------------------------------------------------------------------
 # --- FIXED FUNCTION: check_and_update_prediction_hits_job ---
-# --------------------------------------------------------------------------------
+# -----------------------------------------------------------------------
+
 def check_and_update_prediction_hits_job():
     """
     Finds predictions for draws that have already passed but haven't been
@@ -1119,7 +1120,9 @@ def check_and_update_prediction_hits_job():
             logging.info(f"Updated prediction doc {prediction_to_update.id} with {hits} hits.")
             return True
         else:
-            logging.info(f"No pending past predictions found in {history_ref.path} to update.")
+            # --- THIS IS THE CORRECTED LINE ---
+            full_path = f"{history_ref.parent.path}/{history_ref.id}"
+            logging.info(f"No pending past predictions found in {full_path} to update.")
             return False
 
     # 3. Update the public prediction history
@@ -1133,6 +1136,8 @@ def check_and_update_prediction_hits_job():
         find_and_update_prediction(user_history_ref)
 
     logging.info("--- JOB END: Finished updating prediction hits ---")
+    
+
 
 
 def precompute_successful_bonuses_job():
