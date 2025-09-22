@@ -1041,30 +1041,62 @@ def update_all_user_predictions_job():
             logging.info(f"Saved prediction for user {user.id}")
 
 def check_and_update_prediction_hits_job():
-    # Corrected unpacking for single bonus
-    latest_draw_time, latest_mains, bonus, _ = get_latest_actual_draw()
-    if not latest_draw_time: return
+    """
+    Finds the latest prediction that hasn't been updated yet,
+    calculates the hits against the latest actual draw, and updates it.
+    """
+    logging.info("--- JOB: Checking for prediction results to update ---")
     
-    # Logic to find the corresponding prediction time needs to be robust
-    # Assuming predictions are for the *next* draw after they are generated.
-    # We find the prediction whose target_draw_time matches the actual draw time.
-    pred_doc_id = latest_draw_time.strftime('%Y-%m-%d_%H%M')
-    
-    update_payload = {'actual_mains': latest_mains, 'actual_booster': bonus} # Use 'actual_bonus'
-    
-    public_pred_ref = get_public_prediction_history_ref().document(pred_doc_id)
-    public_pred_doc = public_pred_ref.get()
-    if public_pred_doc.exists and not public_pred_doc.to_dict().get('actual_mains'):
-        hits = len(set(public_pred_doc.to_dict().get('prediction', [])).intersection(set(latest_mains)))
-        public_pred_ref.update({**update_payload, 'hits': hits})
+    # 1. Get the latest actual draw results from the database
+    latest_draw_time, latest_mains, latest_bonus, _ = get_latest_actual_draw()
+    if not latest_draw_time or not latest_mains:
+        logging.warning("No latest draw found. Skipping hits update.")
+        return
+
+    # 2. Prepare the correct update payload
+    # FIX: Use 'actual_bonus' to match the front end, not 'actual_booster'
+    update_payload = {'actual_mains': latest_mains, 'actual_bonus': latest_bonus}
+    hits = 0
+
+    def find_and_update_prediction(history_ref):
+        """Inner function to find and update a prediction in a given collection."""
+        nonlocal hits
         
+        # FIX: Instead of guessing the doc ID, query for the latest prediction
+        # that is missing results (where 'hits' is None).
+        query = history_ref.where(
+            filter=FieldFilter('hits', '==', None)
+        ).order_by(
+            'target_draw_time', direction=firestore.Query.DESCENDING
+        ).limit(1).stream()
+        
+        # The query returns an iterator, get the first (and only) result
+        prediction_to_update = next(query, None)
+        
+        if prediction_to_update:
+            pred_data = prediction_to_update.to_dict()
+            prediction_numbers = pred_data.get('prediction', [])
+            hits = len(set(prediction_numbers).intersection(set(latest_mains)))
+            
+            # Update the document with the actual results and hit count
+            prediction_to_update.reference.update({**update_payload, 'hits': hits})
+            logging.info(f"Updated prediction doc {prediction_to_update.id} with {hits} hits.")
+            return True
+        else:
+            logging.info("No pending predictions found in this collection to update.")
+            return False
+
+    # 3. Update the public prediction history
+    public_history_ref = get_public_prediction_history_ref()
+    find_and_update_prediction(public_history_ref)
+    
+    # 4. Update all subscribed users' prediction histories
     users_ref = db.collection('artifacts').document(get_app_id_for_firestore()).collection('users')
     for user_doc in users_ref.stream():
-        pred_ref = get_user_predictions_history_ref(user_doc.id).document(pred_doc_id)
-        prediction = pred_ref.get()
-        if prediction.exists and not prediction.to_dict().get('actual_mains'):
-            hits = len(set(prediction.to_dict().get('prediction', [])).intersection(set(latest_mains)))
-            pred_ref.update({**update_payload, 'hits': hits})
+        user_history_ref = get_user_predictions_history_ref(user_doc.id)
+        find_and_update_prediction(user_history_ref)
+
+    logging.info("--- JOB END: Finished updating prediction hits ---")
 
 def precompute_successful_bonuses_job():
     logging.info("--- JOB START: Pre-compute Successful Bonuses ---")
