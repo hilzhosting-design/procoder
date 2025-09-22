@@ -988,8 +988,18 @@ def backtest_results_page():
 scheduler = BackgroundScheduler(daemon=True, timezone=harare_tz)
 HISTORY_WINDOW_DAYS = 90
 
+# --------------------------------------------------------------------------------
+# --- FIXED FUNCTION: scrape_and_process_draws_job ---
+# --------------------------------------------------------------------------------
 def scrape_and_process_draws_job():
     logging.info("--- JOB START: Scrape and Process Draws ---")
+
+    # --- Part 1: Check for and update hits for the PREVIOUS draw ---
+    # This should be done first, as new results might be available now.
+    check_and_update_prediction_hits_job()
+    
+    # --- Part 2: Scrape, Store, and Generate the NEXT prediction ---
+    logging.info("--- Continuing to Scrape and Generate Next Prediction ---")
     
     # DEBUGGING STEP 1: Check if scraping works
     draws_data, error = fetch_draws_from_website()
@@ -1025,25 +1035,23 @@ def scrape_and_process_draws_job():
         
         try:
             prediction_doc_id = prediction_payload['target_draw_time'].strftime('%Y-%m-%d_%H%M')
-            # DEBUGGING: Log the payload just before saving
             logging.debug(f"[DEBUG-PREDICTION] Attempting to save prediction payload to doc '{prediction_doc_id}': {prediction_payload}")
             
             get_public_prediction_history_ref().document(prediction_doc_id).set(prediction_payload)
             get_public_prediction_doc_ref().set(prediction_payload, merge=True)
             
             logging.info(f"[DEBUG-PREDICTION] Step 5 SUCCESS: Saved new prediction for {prediction_doc_id}.")
+            
+            # After a new prediction is successfully saved, update it for all users.
+            update_all_user_predictions_job()
+
         except Exception as e:
             logging.error(f"[DEBUG-PREDICTION] Step 5 FAILED: Failed to save public prediction to Firestore: {e}", exc_info=True)
-            return # Stop execution if saving fails
     else:
-        # This is the critical failure log. If you see this, the problem is in the ML model loading or prediction logic.
         logging.error("[DEBUG-PREDICTION] Step 4 & 5 FAILED: Failed to generate live prediction. The result was None. No document will be created.")
-        return # Stop execution because there's nothing to save
 
-    # These jobs run only if the prediction was successfully created
-    update_all_user_predictions_job()
-    check_and_update_prediction_hits_job()
     logging.info("--- JOB END: Scrape and Process Draws ---")
+
 
 def update_all_user_predictions_job():
     public_pred_doc = get_public_prediction_doc_ref().get()
@@ -1059,10 +1067,13 @@ def update_all_user_predictions_job():
             history_ref.document(pred_doc_id).set(pred_data, merge=True)
             logging.info(f"Saved prediction for user {user.id}")
 
+# --------------------------------------------------------------------------------
+# --- FIXED FUNCTION: check_and_update_prediction_hits_job ---
+# --------------------------------------------------------------------------------
 def check_and_update_prediction_hits_job():
     """
-    Finds the latest prediction that hasn't been updated yet,
-    calculates the hits against the latest actual draw, and updates it.
+    Finds predictions for draws that have already passed but haven't been
+    updated with results yet, calculates the hits, and updates them.
     """
     logging.info("--- JOB: Checking for prediction results to update ---")
     
@@ -1073,7 +1084,6 @@ def check_and_update_prediction_hits_job():
         return
 
     # 2. Prepare the correct update payload
-    # FIX: Use 'actual_bonus' to match the front end, not 'actual_booster'
     update_payload = {'actual_mains': latest_mains, 'actual_bonus': latest_bonus}
     hits = 0
 
@@ -1081,28 +1091,35 @@ def check_and_update_prediction_hits_job():
         """Inner function to find and update a prediction in a given collection."""
         nonlocal hits
         
-        # FIX: Instead of guessing the doc ID, query for the latest prediction
-        # that is missing results (where 'hits' is None).
+        # MODIFIED QUERY: Find predictions where 'hits' is None AND the target time is in the past.
+        # This prevents updating predictions for future draws.
         query = history_ref.where(
             filter=FieldFilter('hits', '==', None)
+        ).where(
+            filter=FieldFilter('target_draw_time', '<', datetime.now(harare_tz))
         ).order_by(
             'target_draw_time', direction=firestore.Query.DESCENDING
         ).limit(1).stream()
         
-        # The query returns an iterator, get the first (and only) result
         prediction_to_update = next(query, None)
         
         if prediction_to_update:
             pred_data = prediction_to_update.to_dict()
             prediction_numbers = pred_data.get('prediction', [])
+            
+            # Ensure we are matching the correct draw
+            target_time = normalize_to_harare_time(pred_data.get('target_draw_time'))
+            if latest_draw_time.date() != target_time.date() or latest_draw_time.hour != target_time.hour:
+                 logging.warning(f"Skipping update for doc {prediction_to_update.id}. Latest draw time {latest_draw_time} does not match target time {target_time}.")
+                 return False
+
             hits = len(set(prediction_numbers).intersection(set(latest_mains)))
             
-            # Update the document with the actual results and hit count
             prediction_to_update.reference.update({**update_payload, 'hits': hits})
             logging.info(f"Updated prediction doc {prediction_to_update.id} with {hits} hits.")
             return True
         else:
-            logging.info("No pending predictions found in this collection to update.")
+            logging.info(f"No pending past predictions found in {history_ref.path} to update.")
             return False
 
     # 3. Update the public prediction history
@@ -1116,6 +1133,7 @@ def check_and_update_prediction_hits_job():
         find_and_update_prediction(user_history_ref)
 
     logging.info("--- JOB END: Finished updating prediction hits ---")
+
 
 def precompute_successful_bonuses_job():
     logging.info("--- JOB START: Pre-compute Successful Bonuses ---")
