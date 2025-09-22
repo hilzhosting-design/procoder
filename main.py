@@ -248,6 +248,7 @@ def fetch_draws_from_website(url, draw_type):
         logging.error(error_msg)
         return [], error_msg
 
+# --- FIX: Using the correct firestore.DOCUMENT_ID constant ---
 def store_draws_to_firestore(draws_data):
     """
     Stores a list of draw data to Firestore, using a unique document ID
@@ -259,8 +260,10 @@ def store_draws_to_firestore(draws_data):
     draws_collection = get_draws_collection_ref()
     batch = db.batch()
     
+    # Create a list of potential doc IDs to check for existence
     doc_ids_to_check = [f"{ts.strftime('%Y-%m-%d')}_{dtype}" for ts, _, _, dtype in draws_data]
     
+    # This check is necessary because a 'in' query on an empty list will error
     if not doc_ids_to_check:
         return 0
 
@@ -271,10 +274,11 @@ def store_draws_to_firestore(draws_data):
     inserted_count = 0
 
     for timestamp, mains, bonus, draw_type in draws_data:
+        # Create a unique ID like "2025-09-22_Teatime"
         doc_id = f"{timestamp.strftime('%Y-%m-%d')}_{draw_type}"
 
         if doc_id in existing_doc_ids:
-            continue
+            continue # Skip if this exact draw already exists
 
         doc_ref = draws_collection.document(doc_id)
         try:
@@ -284,7 +288,7 @@ def store_draws_to_firestore(draws_data):
                 'booster': bonus, 
                 'draw_date': timestamp.strftime('%Y-%m-%d'),
                 'draw_type': draw_type, 
-                'timestamp': timestamp
+                'timestamp': timestamp # Store the full, correct timestamp
             }
             batch.set(doc_ref, payload)
             inserted_count += 1
