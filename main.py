@@ -527,12 +527,17 @@ class PredictionResult:
 
 def get_next_target_draw_time(current_time_harare):
     now = current_time_harare.astimezone(harare_tz).replace(second=0, microsecond=0)
-    # Corrected draw times for UK 49s (Lunchtime and Teatime)
-    today_lunchtime = now.replace(hour=14, minute=50) # Approx. 2:50 PM Harare time
-    today_teatime = now.replace(hour=19, minute=50) # Approx. 7:50 PM Harare time
-    if now < today_lunchtime: return today_lunchtime
-    if now < today_teatime: return today_teatime
-    return (now + timedelta(days=1)).replace(hour=14, minute=50)
+    
+    # Corrected draw times for UK 49s, accounting for BST
+    today_lunchtime = now.replace(hour=13, minute=50) # Corrected to 1:50 PM Harare time
+    today_teatime = now.replace(hour=18, minute=50)   # Corrected to 6:50 PM Harare time
+    
+    if now < today_lunchtime: 
+        return today_lunchtime
+    if now < today_teatime: 
+        return today_teatime
+        
+    return (now + timedelta(days=1)).replace(hour=13, minute=50)
 
 # --- Flask Routes ---
 @app.context_processor
