@@ -270,8 +270,6 @@ def store_draws_to_firestore(draws_data):
 
     existing_docs = draws_collection.where(FieldFilter(firestore.firestore.firestore.DOCUMENT_ID, 'in', doc_ids_to_check)).stream()
 
-    
-    
     inserted_count = 0
 
     for timestamp, mains, bonus, draw_type in draws_data:
