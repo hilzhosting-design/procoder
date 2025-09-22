@@ -251,6 +251,7 @@ def fetch_draws_from_website(url, draw_type):
         logging.error(error_msg)
         return [], error_msg
 
+
 def store_draws_to_firestore(draws_data):
     """
     Stores a list of draw data to Firestore, using a unique document ID
@@ -267,14 +268,10 @@ def store_draws_to_firestore(draws_data):
     if not doc_ids_to_check:
         return 0
 
-    # CORRECTED LINE: Use firestore.DOCUMENT_ID to query by the document's name
-   # existing_docs = draws_collection.where(FieldFilter(firestore.DOCUMENT_ID, 'in', doc_ids_to_check)).stream()
-
-    existing_docs = draws_collection.where(FieldFilter(firestore.DOCUMENT_ID, 'in', doc_ids_to_check)).stream()
-
-    # UNCOMMENT THIS LINE: This is the critical line that was missing.
+    # CORRECTED LINE: Use a FieldFilter with the google.cloud.firestore.DOCUMENT_ID
+    existing_docs = draws_collection.where(filter=FieldFilter(firestore.DOCUMENT_ID, 'in', doc_ids_to_check)).stream()
     existing_doc_ids = {doc.id for doc in existing_docs}
-
+    
     inserted_count = 0
 
     for timestamp, mains, bonus, draw_type in draws_data:
