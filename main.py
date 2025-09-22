@@ -173,21 +173,16 @@ def send_telegram_message(message, chat_id):
 
 # --- Web Scraping and Data Processing ---
 UK_49S_LUNCHTIME_URL = "https://za.lottonumbers.com/uk-49s-lunchtime/past-results"
+UK_49S_TEATIME_URL = "https://za.lottonumbers.com/uk-49s-teatime/past-results"
 
-def fetch_draws_from_website():
+def fetch_draws_from_website(url, draw_type):
     """
-    Scrapes the historical UK 49s Lunchtime draws from the specified website.
+    Scrapes historical draws from a specified URL and associates them with a draw type.
     Returns a tuple: (list_of_draws, error_message_or_None).
     """
-    url = "https://za.lottonumbers.com/uk-49s-lunchtime/past-results"
-    
     try:
-        logging.info(f"Starting to scrape URL: {url}")
-        
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-        }
-        
+        logging.info(f"Starting to scrape URL for {draw_type}: {url}")
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
         response = requests.get(url, headers=headers, timeout=10)
         response.raise_for_status()
         
@@ -195,7 +190,7 @@ def fetch_draws_from_website():
         results_table_body = soup.find('tbody')
         
         if not results_table_body:
-            msg = "Could not find historical results table body."
+            msg = f"Could not find historical results table body for {draw_type}."
             logging.warning(msg)
             return [], msg
             
@@ -205,20 +200,27 @@ def fetch_draws_from_website():
         for row in rows:
             try:
                 date_td = row.find('td', class_='date-row')
-                if not date_td:
-                    logging.warning("Skipping row due to missing date element.")
-                    continue
+                if not date_td: continue
                 
                 date_str = date_td.text.strip()
                 date_str = re.sub(r'(\d+)(st|nd|rd|th)', r'\1', date_str)
-                draw_date = datetime.strptime(date_str, '%A %d %B %Y')
-            
+                
+                naive_draw_date = datetime.strptime(date_str, '%A %d %B %Y')
+
+                if draw_type == 'Lunchtime':
+                    draw_time = naive_draw_date.replace(hour=13, minute=50)
+                elif draw_type == 'Teatime':
+                    draw_time = naive_draw_date.replace(hour=18, minute=50)
+                else:
+                    draw_time = naive_draw_date.replace(hour=12, minute=0)
+
+                aware_draw_timestamp = harare_tz.localize(draw_time)
+
             except (AttributeError, ValueError) as e:
                 logging.warning(f"Skipping row due to date parsing error: {e}")
                 continue
 
             numbers_ul = row.find('ul', class_='balls')
-            
             if numbers_ul:
                 ball_lis = numbers_ul.find_all('li', class_='ball')
                 main_numbers_li = [li for li in ball_lis if 'bonus-ball' not in li.get('class', [])]
@@ -229,78 +231,65 @@ def fetch_draws_from_website():
                 
                 if main_numbers and bonus_number is not None:
                     historical_draws.append(
-                        (draw_date, main_numbers, bonus_number, 'UK 49s Lunchtime')   
+                        (aware_draw_timestamp, main_numbers, bonus_number, draw_type)   
                     )
-
-                
                 else:
                     logging.warning(f"Skipping row due to missing numbers: {date_str}")
             
-        logging.info(f"Successfully scraped {len(historical_draws)} historical draws.")
-        # On success, return the data and None for the error
+        logging.info(f"Successfully scraped {len(historical_draws)} {draw_type} draws.")
         return historical_draws, None
 
     except requests.exceptions.RequestException as e:
         error_msg = f"HTTP request failed: {e}"
         logging.error(error_msg)
-        # On failure, return an empty list and the error message
         return [], error_msg
     except Exception as e:
         error_msg = f"Unexpected error in fetch_draws_from_website: {e}"
         logging.error(error_msg)
-        # On failure, return an empty list and the error message
         return [], error_msg
 
 def store_draws_to_firestore(draws_data):
     """
-    Stores a list of draw data to Firestore, chunking queries to respect
-    Firestore's 30-value limit for the 'IN' operator.
+    Stores a list of draw data to Firestore, using a unique document ID
+    to prevent duplicates for different draws on the same day.
     """
     if db is None or not draws_data:
         return 0
 
     draws_collection = get_draws_collection_ref()
     batch = db.batch()
+    
+    doc_ids_to_check = [f"{ts.strftime('%Y-%m-%d')}_{dtype}" for ts, _, _, dtype in draws_data]
+    
+    if not doc_ids_to_check:
+        return 0
+
+    # CORRECTED LINE: Use firestore.DOCUMENT_ID to query by the document's name
+    existing_docs = draws_collection.where(firestore.DOCUMENT_ID, 'in', doc_ids_to_check).stream()
+    existing_doc_ids = {doc.id for doc in existing_docs}
+    
     inserted_count = 0
 
-    # --- START: CHUNKED DUPLICATE CHECK ---
-    scraped_dates = {t.strftime('%Y-%m-%d') for t, _, _, _ in draws_data}
-    dates_to_check = list(scraped_dates)
-    existing_dates_set = set()
-
-    # 1. Firestore 'in' queries are limited to 30 values, so we process in chunks.
-    for i in range(0, len(dates_to_check), 30):
-        # 2. Get a chunk of up to 30 dates.
-        chunk = dates_to_check[i:i + 30]
-        
-        # 3. Perform the query on the smaller chunk.
-        existing_docs = draws_collection.where(
-            filter=FieldFilter('draw_date', 'in', chunk)
-        ).stream()
-
-        # 4. Add the results from this chunk to our main set.
-        for doc in existing_docs:
-            existing_dates_set.add(doc.to_dict()['draw_date'])
-    
-    logging.info(f"Found {len(existing_dates_set)} existing draws in the current batch range.")
-    # --- END: CHUNKED DUPLICATE CHECK ---
-
     for timestamp, mains, bonus, draw_type in draws_data:
-        draw_date_str = timestamp.strftime('%Y-%m-%d')
+        doc_id = f"{timestamp.strftime('%Y-%m-%d')}_{draw_type}"
 
-        if draw_date_str not in existing_dates_set:
-            try:
-                payload = {
-                    'main1': mains[0], 'main2': mains[1], 'main3': mains[2],
-                    'main4': mains[3], 'main5': mains[4], 'main6': mains[5],
-                    'booster': bonus, 'draw_date': draw_date_str,
-                    'draw_type': draw_type, 'timestamp': timestamp
-                }
-                new_doc_ref = draws_collection.document()
-                batch.set(new_doc_ref, payload)
-                inserted_count += 1
-            except Exception as e:
-                logging.error(f"Failed to prepare draw for batch: {e}")
+        if doc_id in existing_doc_ids:
+            continue
+
+        doc_ref = draws_collection.document(doc_id)
+        try:
+            payload = {
+                'main1': mains[0], 'main2': mains[1], 'main3': mains[2],
+                'main4': mains[3], 'main5': mains[4], 'main6': mains[5],
+                'booster': bonus, 
+                'draw_date': timestamp.strftime('%Y-%m-%d'),
+                'draw_type': draw_type, 
+                'timestamp': timestamp
+            }
+            batch.set(doc_ref, payload)
+            inserted_count += 1
+        except Exception as e:
+            logging.error(f"Failed to prepare draw {doc_id} for batch: {e}")
 
     if inserted_count > 0:
         try:
@@ -309,7 +298,7 @@ def store_draws_to_firestore(draws_data):
         except Exception as e:
             logging.error(f"Failed to commit batch to Firestore: {e}")
             return 0
-
+    
     return inserted_count
     
 def get_historical_draws_from_firestore(limit=None, history_window_days=None):
@@ -321,7 +310,7 @@ def get_historical_draws_from_firestore(limit=None, history_window_days=None):
         query = query.where(filter=FieldFilter('timestamp', '>=', start_date_for_window))
     if limit: query = query.limit(limit)
     draws = []
-    skipped_count = 0  #<-- Add a counter
+    skipped_count = 0
     try:
         for doc in query.stream():
             data = doc.to_dict()
@@ -342,7 +331,7 @@ def get_historical_draws_from_firestore(limit=None, history_window_days=None):
             draws.append((timestamp_dt, sorted(mains), bonus, data.get('draw_type', 'Unknown')))
     except Exception as e: logging.error(f"Failed to fetch historical draws: {e}")
     
-    if skipped_count > 0: #<-- Add a summary log
+    if skipped_count > 0:
         logging.warning(f"Total draws retrieved: {len(draws)}. Total draws skipped due to incomplete data: {skipped_count}.")
         
     return draws
@@ -350,7 +339,7 @@ def get_historical_draws_from_firestore(limit=None, history_window_days=None):
 def get_latest_actual_draw():
     draws = get_historical_draws_from_firestore(limit=1)
     if draws: return draws[0]
-    return None, None, None, None # Corrected return for single bonus
+    return None, None, None, None
 
 # --- ML Feature Helpers ---
 def super_hybrid_pool(bonus):
@@ -385,12 +374,10 @@ def create_feature_dataset(historical_draws):
         target_draw_mains = set(historical_draws[i][1])
         base_draw = historical_draws[i+1]
         prediction_history = historical_draws[i+2:]
-        # Unpack single bonus
         _, base_mains, bonus, _ = base_draw
         hot_pool = get_hot_numbers(prediction_history)
         overdue_pool = get_overdue_numbers(prediction_history)
         pair_pool = get_strongest_pairs(prediction_history)
-        # Use single bonus for bonus pool
         bonus_pool = set(super_hybrid_pool(bonus))
         for num in range(1, 51):
             features.append({
@@ -400,7 +387,6 @@ def create_feature_dataset(historical_draws):
                 'is_in_pair': 1 if num in pair_pool else 0, 
                 'is_in_bonus_pool': 1 if num in bonus_pool else 0, 
                 'was_in_prev_mains': 1 if num in base_mains else 0, 
-                # Check against single bonus
                 'was_in_prev_bonus': 1 if num == bonus else 0, 
                 'was_winner': 1 if num in target_draw_mains else 0
             })
@@ -447,7 +433,6 @@ def load_model():
         model_doc_ref = db.collection('artifacts').document(get_app_id_for_firestore()).collection('ml_models').document('prediction_model')
         model_doc = model_doc_ref.get()
         if not model_doc.exists:
-            # DEBUGGING: Added a clear log message for when the model document is missing
             logging.warning("[DEBUG-PREDICTION] Model document not found in Firestore. A model must be trained first.")
             return None
         
@@ -461,7 +446,6 @@ def load_model():
         logging.info("[DEBUG-PREDICTION] ML model successfully loaded from Firestore.")
         return model
     except Exception as e:
-        # DEBUGGING: Log any error during the loading/decoding process
         logging.error(f"[DEBUG-PREDICTION] Failed to load ML model from Firestore: {e}", exc_info=True)
         return None
 
@@ -469,16 +453,13 @@ def load_model():
 def predict_strategy(base_mains, bonus, historical_draws, target_size=4):
     """
     Generates a prediction using only the trained machine learning model.
-    If the model is not available, this function will fail and return None.
     """
     logging.debug("[DEBUG-PREDICTION] Attempting to load model for prediction.")
     model = load_model()
     
-    # MODIFIED: Fail if model is not available, do not use a fallback.
     if model is None:
-        # DEBUGGING: Critical log message if model loading fails. This is a common reason for prediction failure.
-        logging.error("[DEBUG-PREDICTION] ML model is NOT available. Cannot generate prediction. Check if model has been trained and saved correctly.")
-        return None # Return None to indicate failure
+        logging.error("[DEBUG-PREDICTION] ML model is NOT available. Cannot generate prediction.")
+        return None
     
     logging.info("[DEBUG-PREDICTION] Using trained ML model from Firestore for prediction.")
     hot_pool, overdue_pool, pair_pool = get_hot_numbers(historical_draws), get_overdue_numbers(historical_draws), get_strongest_pairs(historical_draws)
@@ -506,21 +487,13 @@ def generate_live_prediction(historical_draws):
         logging.warning(f"[DEBUG-PREDICTION] Not enough historical draws to generate a prediction. Need at least 3, got {len(historical_draws)}.")
         return None
 
-    # --- FIX ---
-    # Use the second-to-last draw (index 1) as the basis for predicting the NEXT draw.
-    # The latest draw is at index 0 and cannot be used for a true forecast.
-    base_draw_for_prediction = historical_draws[1]
-    
-    # --- FIX ---
-    # The history for calculating features should not include the latest draw (0) or the base draw (1).
+    base_draw_for_prediction = historical_draws[1] 
     history_for_features = historical_draws[2:]
 
     logging.debug(f"[DEBUG-PREDICTION] Generating prediction based on the base draw: {base_draw_for_prediction}")
     
-    # Unpack the single bonus from the correct base draw
     base_mains, bonus = base_draw_for_prediction[1], base_draw_for_prediction[2]
     
-    # Call the strategy to get the numbers, using the correct history slice
     prediction = predict_strategy(base_mains, bonus, history_for_features)
     
     if prediction is None:
@@ -541,15 +514,14 @@ class PredictionResult:
         self.bonus = bonus
         self.prediction = prediction
         self.actual_mains = actual_mains
-        self.actual_bonus = actual_bonus # Renamed for clarity
+        self.actual_bonus = actual_bonus
         self.hits = hits
 
 def get_next_target_draw_time(current_time_harare):
     now = current_time_harare.astimezone(harare_tz).replace(second=0, microsecond=0)
     
-    # Corrected draw times for UK 49s, accounting for BST
-    today_lunchtime = now.replace(hour=13, minute=50) # Corrected to 1:50 PM Harare time
-    today_teatime = now.replace(hour=18, minute=50)   # Corrected to 6:50 PM Harare time
+    today_lunchtime = now.replace(hour=13, minute=50)
+    today_teatime = now.replace(hour=18, minute=50)
     
     if now < today_lunchtime: 
         return today_lunchtime
@@ -589,8 +561,7 @@ def index():
         return render_template('index.html', error="Database connection error.")
     uid_to_view = session.get('view_as_uid', session.get('firebase_uid'))
     
-    # Corrected unpacking for latest draw
-    latest_draw_time, latest_mains, latest_bonus, _ = get_latest_actual_draw()
+    latest_draw_time, latest_mains, latest_bonus, draw_type = get_latest_actual_draw()
     latest_bonuses = [latest_bonus] if latest_bonus is not None else []
     
     live_prediction_history = []
@@ -612,7 +583,7 @@ def index():
                 data.get('booster'), 
                 data.get('prediction'), 
                 data.get('actual_mains'), 
-                data.get('actual_bonus'), # Use actual_bonus
+                data.get('actual_bonus'),
                 data.get('hits')
             ))
     except Exception as e: logging.error(f"Could not fetch prediction history: {e}")
@@ -623,7 +594,7 @@ def index():
         combos_3 = list(itertools.combinations(current_prediction_vs_actual.prediction, 3))
         combos_2 = list(itertools.combinations(current_prediction_vs_actual.prediction, 2))
         
-    return render_template('index.html', latest_draw_time=latest_draw_time, latest_actual_mains=latest_mains, latest_actual_bonuses=latest_bonuses, current_prediction_vs_actual=current_prediction_vs_actual, generated_main_combos_3=combos_3, generated_main_combos_2=combos_2, live_prediction_history=live_prediction_history, is_subscribed=is_subscribed_for_view)
+    return render_template('index.html', latest_draw_time=latest_draw_time, latest_actual_mains=latest_mains, latest_actual_bonuses=latest_bonuses, current_prediction_vs_actual=current_prediction_vs_actual, generated_main_combos_3=combos_3, generated_main_combos_2=combos_2, live_prediction_history=live_prediction_history, is_subscribed=is_subscribed_for_view, latest_draw_type=draw_type)
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -704,7 +675,6 @@ def send_alert():
         flash("No current prediction available.", "error")
         return redirect(url_for('index'))
     pred_data = pred_doc.to_dict()
-    # Corrected message for single bonus
     bonus_str = str(pred_data.get('bonus', 'N/A'))
     msg = f"🔮 UK 49s Prediction 🔮\n\nPrediction: <b>{', '.join(map(str, pred_data.get('prediction', [])))}</b>\nBased on previous bonus: <b>{bonus_str}</b>\n\nGood luck!"
     success, message = send_telegram_message(msg, chat_id)
@@ -911,7 +881,6 @@ def backtest_strategy_job():
                 temp_model = RandomForestClassifier(n_estimators=100, random_state=42, class_weight='balanced')
                 temp_model.fit(X_train, y_train)
                 
-                # Corrected unpacking for single bonus
                 base_mains, bonus = base_draw_for_prediction[1], base_draw_for_prediction[2]
                 history_for_features = list(reversed(training_history[:-1]))
                 
@@ -925,11 +894,9 @@ def backtest_strategy_job():
                 prob_series = pd.Series(probabilities, index=range(1, 51))
                 predicted_mains = sorted(prob_series.nlargest(4).index.tolist())
                 
-                # Corrected unpacking for target draw
                 target_timestamp, target_mains, target_bonus, target_draw_type = target_actual_draw
                 hits = len(set(predicted_mains).intersection(set(target_mains)))
                 
-                # Corrected results payload for single bonus
                 results.append({'target_draw_time': target_timestamp.isoformat(), 'draw_date': target_timestamp.strftime('%Y-%m-%d'), 'draw_type': target_draw_type, 'strategy_used': 'ml_walk_forward', 'booster': bonus, 'prediction': predicted_mains, 'actual_booster': target_mains, 'actual_bonus': target_bonus, 'hits': hits})
                 
                 progress = int(((i - initial_training_size + 1) / total_predictions) * 100)
@@ -937,9 +904,8 @@ def backtest_strategy_job():
                     get_backtest_results_doc_ref().update({'progress': f'{progress}%'})
 
             results.reverse()
-            # Corrected ranking for single bonus
             main_ranking = Counter(num for _, mains, _, _ in draws_data for num in mains).most_common()
-            bonus_ranking = Counter(draw[2] for draw in draws_data).most_common() # Index 2 is the bonus
+            bonus_ranking = Counter(draw[2] for draw in draws_data).most_common()
             
             payload = {
                 'status': 'completed',
@@ -993,70 +959,68 @@ def backtest_results_page():
 scheduler = BackgroundScheduler(daemon=True, timezone=harare_tz)
 HISTORY_WINDOW_DAYS = 90
 
-# --------------------------------------------------------------------------------
-# --- FIXED FUNCTION: scrape_and_process_draws_job ---
-# --------------------------------------------------------------------------------
 def scrape_and_process_draws_job():
     logging.info("--- JOB START: Scrape and Process Draws ---")
 
-    # --- Part 1: Check for and update hits for the PREVIOUS draw ---
-    # This should be done first, as new results might be available now.
     check_and_update_prediction_hits_job()
     
-    # --- Part 2: Scrape, Store, and Generate the NEXT prediction ---
-    logging.info("--- Continuing to Scrape and Generate Next Prediction ---")
-    
-    # DEBUGGING STEP 1: Check if scraping works
-    draws_data, error = fetch_draws_from_website()
-    if error:
-        logging.error(f"[DEBUG-PREDICTION] Step 1 FAILED: Scraping job failed with error: {error}")
-        return
-    logging.info(f"[DEBUG-PREDICTION] Step 1 SUCCESS: Fetched {len(draws_data)} draws from website.")
+    now = datetime.now(harare_tz)
+    url_to_fetch, draw_type_to_fetch = None, None
 
-    # DEBUGGING STEP 2: Check if draws are stored
-    stored_count = store_draws_to_firestore(draws_data)
-    logging.info(f"[DEBUG-PREDICTION] Step 2 COMPLETE: Stored {stored_count} new draws to Firestore.")
-    
-    # DEBUGGING STEP 3: Check if historical data can be retrieved
-    historical_draws = get_historical_draws_from_firestore(history_window_days=HISTORY_WINDOW_DAYS)
-    logging.info(f"[DEBUG-PREDICTION] Step 3 COMPLETE: Retrieved {len(historical_draws)} historical draws for prediction.")
-
-    # DEBUGGING STEP 4: Attempt to generate the prediction
-    live_prediction_result = generate_live_prediction(historical_draws)
-    
-    # DEBUGGING STEP 5: Check the result and save to Firestore
-    if live_prediction_result:
-        logging.info("[DEBUG-PREDICTION] Step 4 SUCCESS: Prediction generated.")
-        prediction_payload = {
-            'target_draw_time': get_next_target_draw_time(datetime.now(harare_tz)), 
-            'strategy_used': live_prediction_result['strategy_used'], 
-            'booster': historical_draws[1][2], # Get bonus from the correct base draw
-            'prediction': live_prediction_result['prediction'], 
-            'actual_mains': [], 
-            'actual_booster': None, 
-            'hits': None, 
-            'timestamp_generated': firestore.SERVER_TIMESTAMP
-        }
-        
-        try:
-            prediction_doc_id = prediction_payload['target_draw_time'].strftime('%Y-%m-%d_%H%M')
-            logging.debug(f"[DEBUG-PREDICTION] Attempting to save prediction payload to doc '{prediction_doc_id}': {prediction_payload}")
-            
-            get_public_prediction_history_ref().document(prediction_doc_id).set(prediction_payload)
-            get_public_prediction_doc_ref().set(prediction_payload, merge=True)
-            
-            logging.info(f"[DEBUG-PREDICTION] Step 5 SUCCESS: Saved new prediction for {prediction_doc_id}.")
-            
-            # After a new prediction is successfully saved, update it for all users.
-            update_all_user_predictions_job()
-
-        except Exception as e:
-            logging.error(f"[DEBUG-PREDICTION] Step 5 FAILED: Failed to save public prediction to Firestore: {e}", exc_info=True)
+    if now.hour >= 19:
+        url_to_fetch, draw_type_to_fetch = UK_49S_TEATIME_URL, 'Teatime'
+    elif now.hour >= 14:
+        url_to_fetch, draw_type_to_fetch = UK_49S_LUNCHTIME_URL, 'Lunchtime'
     else:
-        logging.error("[DEBUG-PREDICTION] Step 4 & 5 FAILED: Failed to generate live prediction. The result was None. No document will be created.")
+        logging.info("Not time to fetch new draw results yet. Exiting job.")
+        return
+
+    logging.info(f"--- Determined it's time to fetch {draw_type_to_fetch} results. ---")
+    
+    draws_data, error = fetch_draws_from_website(url_to_fetch, draw_type_to_fetch)
+    if error:
+        logging.error(f"Scraping job failed for {draw_type_to_fetch} with error: {error}")
+        return
+    
+    if not draws_data:
+        logging.warning(f"No draws were scraped for {draw_type_to_fetch}. Aborting.")
+        return
+    
+    stored_count = store_draws_to_firestore(draws_data)
+    logging.info(f"Stored {stored_count} new draws to Firestore.")
+    
+    if stored_count > 0:
+        historical_draws = get_historical_draws_from_firestore(history_window_days=HISTORY_WINDOW_DAYS)
+        logging.info(f"Retrieved {len(historical_draws)} historical draws for prediction.")
+
+        live_prediction_result = generate_live_prediction(historical_draws)
+        
+        if live_prediction_result:
+            base_draw_for_payload = historical_draws[1]
+            prediction_payload = {
+                'target_draw_time': get_next_target_draw_time(datetime.now(harare_tz)), 
+                'strategy_used': live_prediction_result['strategy_used'], 
+                'booster': base_draw_for_payload[2],
+                'prediction': live_prediction_result['prediction'], 
+                'actual_mains': [], 
+                'actual_booster': None, 
+                'hits': None, 
+                'timestamp_generated': firestore.SERVER_TIMESTAMP
+            }
+            try:
+                prediction_doc_id = prediction_payload['target_draw_time'].strftime('%Y-%m-%d_%H%M')
+                get_public_prediction_history_ref().document(prediction_doc_id).set(prediction_payload)
+                get_public_prediction_doc_ref().set(prediction_payload, merge=True)
+                logging.info(f"Saved new prediction for {prediction_doc_id}.")
+                update_all_user_predictions_job()
+            except Exception as e:
+                logging.error(f"Failed to save public prediction to Firestore: {e}", exc_info=True)
+        else:
+            logging.error("Failed to generate live prediction. The result was None.")
+    else:
+        logging.info("No new draws were stored, so no new prediction will be generated.")
 
     logging.info("--- JOB END: Scrape and Process Draws ---")
-
 
 def update_all_user_predictions_job():
     public_pred_doc = get_public_prediction_doc_ref().get()
@@ -1072,33 +1036,17 @@ def update_all_user_predictions_job():
             history_ref.document(pred_doc_id).set(pred_data, merge=True)
             logging.info(f"Saved prediction for user {user.id}")
 
-# --------------------------------------------------------------------------------
-# --- FIXED FUNCTION: check_and_update_prediction_hits_job ---
-# -----------------------------------------------------------------------
-
 def check_and_update_prediction_hits_job():
-    """
-    Finds predictions for draws that have already passed but haven't been
-    updated with results yet, calculates the hits, and updates them.
-    """
     logging.info("--- JOB: Checking for prediction results to update ---")
     
-    # 1. Get the latest actual draw results from the database
     latest_draw_time, latest_mains, latest_bonus, _ = get_latest_actual_draw()
     if not latest_draw_time or not latest_mains:
         logging.warning("No latest draw found. Skipping hits update.")
         return
 
-    # 2. Prepare the correct update payload
     update_payload = {'actual_mains': latest_mains, 'actual_bonus': latest_bonus}
-    hits = 0
 
     def find_and_update_prediction(history_ref):
-        """Inner function to find and update a prediction in a given collection."""
-        nonlocal hits
-        
-        # MODIFIED QUERY: Find predictions where 'hits' is None AND the target time is in the past.
-        # This prevents updating predictions for future draws.
         query = history_ref.where(
             filter=FieldFilter('hits', '==', None)
         ).where(
@@ -1112,38 +1060,32 @@ def check_and_update_prediction_hits_job():
         if prediction_to_update:
             pred_data = prediction_to_update.to_dict()
             prediction_numbers = pred_data.get('prediction', [])
-            
-            # Ensure we are matching the correct draw
             target_time = normalize_to_harare_time(pred_data.get('target_draw_time'))
-            if latest_draw_time.date() != target_time.date() or latest_draw_time.hour != target_time.hour:
-                 logging.warning(f"Skipping update for doc {prediction_to_update.id}. Latest draw time {latest_draw_time} does not match target time {target_time}.")
+            
+            time_difference = abs((latest_draw_time - target_time).total_seconds())
+            if latest_draw_time.date() != target_time.date() or time_difference > 3600:
+                 logging.warning(f"Skipping update for doc {prediction_to_update.id}. Latest draw time {latest_draw_time} does not closely match target time {target_time}.")
                  return False
 
             hits = len(set(prediction_numbers).intersection(set(latest_mains)))
             
             prediction_to_update.reference.update({**update_payload, 'hits': hits})
-            logging.info(f"Updated prediction doc {prediction_to_update.id} with {hits} hits.")
+            logging.info(f"Updated prediction doc {prediction_to_update.id} in collection {history_ref.id} with {hits} hits.")
             return True
         else:
-            # --- THIS IS THE CORRECTED LINE ---
             full_path = f"{history_ref.parent.path}/{history_ref.id}"
             logging.info(f"No pending past predictions found in {full_path} to update.")
             return False
 
-    # 3. Update the public prediction history
     public_history_ref = get_public_prediction_history_ref()
     find_and_update_prediction(public_history_ref)
     
-    # 4. Update all subscribed users' prediction histories
     users_ref = db.collection('artifacts').document(get_app_id_for_firestore()).collection('users')
     for user_doc in users_ref.stream():
         user_history_ref = get_user_predictions_history_ref(user_doc.id)
         find_and_update_prediction(user_history_ref)
 
     logging.info("--- JOB END: Finished updating prediction hits ---")
-    
-
-
 
 def precompute_successful_bonuses_job():
     logging.info("--- JOB START: Pre-compute Successful Bonuses ---")
@@ -1155,7 +1097,6 @@ def precompute_successful_bonuses_job():
     backtest_results = backtest_doc.to_dict().get('results', [])
     successful_bonuses = set()
     for result in backtest_results:
-        # Corrected logic for single bonus
         if result.get('hits', 0) >= 3:
             bonus_num = result.get('booster')
             if bonus_num:
@@ -1186,7 +1127,6 @@ def send_prediction_alerts_job():
     target_time = normalize_to_harare_time(pred_data.get('target_draw_time'))
     if not target_time or (target_time - datetime.now(harare_tz)).total_seconds() > 3 * 3600: return
     
-    # Corrected message for single bonus
     bonus_str = str(pred_data.get('bonus', 'N/A'))
     msg = f"🔮 *Upcoming UK 49s Prediction* 🔮\n\nFor the *{target_time.strftime('%H:%M')}* draw:\n\nPrediction: <b>{', '.join(map(str, pred_data.get('prediction', [])))}</b>\nBased on prior bonus: <b>{bonus_str}</b>\n\n✨Good luck! ✨"
     
@@ -1196,13 +1136,11 @@ def send_prediction_alerts_job():
 
 def send_results_and_hits_job():
     logging.info("--- JOB: Sending results and hits ---")
-    # Corrected unpacking for single bonus
     latest_draw_time, latest_mains, bonus, _ = get_latest_actual_draw()
     if not latest_draw_time or not latest_mains: return
     users = get_subscribed_users_with_telegram()
     if not users: return
 
-    # Match prediction to actual draw time
     pred_doc_id = latest_draw_time.strftime('%Y-%m-%d_%H%M')
     
     for user in users:
@@ -1215,7 +1153,6 @@ def send_results_and_hits_job():
             hits_str = ", ".join(map(str, sorted(list(hits)))) if hits else "None"
             hit_count = len(hits)
             
-            # Corrected message for single bonus
             msg = f"🎉 *Draw Results & Your Hits* 🎉\n\nResults for *{latest_draw_time.strftime('%Y-%m-%d %H:%M')}*:\nMains: <b>{', '.join(map(str, latest_mains))}</b>\nBonus: <b>{bonus}</b>\n\nYour Prediction: {', '.join(map(str, user_pred))}\nYour Hits: ✅ <b>{hits_str}</b>\n\n"
             
             if hit_count >= 3: msg += f"🎯 *Congratulations! You got {hit_count} hits!* 🎯"
@@ -1228,7 +1165,7 @@ def send_results_and_hits_job():
 
 # Schedule All Jobs
 scheduler = BackgroundScheduler(daemon=True, timezone=harare_tz)
-# Adjusted cron times for UK 49s Lunchtime/Teatime draws
+
 scheduler.add_job(scrape_and_process_draws_job, 'cron', hour='15,20', minute='15', id='scrape_process_job', replace_existing=True)
 scheduler.add_job(precompute_successful_bonuses_job, 'cron', hour='3', minute='0', id='precompute_bonuses_job', replace_existing=True)
 scheduler.add_job(send_prediction_alerts_job, 'cron', hour='13,18', minute='30', id='send_prediction_alerts_job', replace_existing=True)
