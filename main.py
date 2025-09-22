@@ -265,8 +265,12 @@ def store_draws_to_firestore(draws_data):
         return 0
 
     # CORRECTED LINE: Use firestore.DOCUMENT_ID to query by the document's name
-    existing_docs = draws_collection.where(firestore.DOCUMENT_ID, 'in', doc_ids_to_check).stream()
-    existing_doc_ids = {doc.id for doc in existing_docs}
+   # existing_docs = draws_collection.where(firestore.DOCUMENT_ID, 'in', doc_ids_to_check).stream()
+   # existing_doc_ids = {doc.id for doc in existing_docs}
+
+    existing_docs = draws_collection.where(FieldFilter(firestore.firestore.firestore.DOCUMENT_ID, 'in', doc_ids_to_check)).stream()
+
+    
     
     inserted_count = 0
 
