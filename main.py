@@ -502,26 +502,31 @@ def predict_strategy(base_mains, bonus, historical_draws, target_size=4):
 
 def generate_live_prediction(historical_draws):
     """Generates the main prediction result dictionary."""
-    # DEBUGGING: Check if there's enough data to even start.
     if not historical_draws or len(historical_draws) < 3:
         logging.warning(f"[DEBUG-PREDICTION] Not enough historical draws to generate a prediction. Need at least 3, got {len(historical_draws)}.")
         return None
+
+    # --- FIX ---
+    # Use the second-to-last draw (index 1) as the basis for predicting the NEXT draw.
+    # The latest draw is at index 0 and cannot be used for a true forecast.
+    base_draw_for_prediction = historical_draws[1]
     
-    latest_draw = historical_draws[0]
-    logging.debug(f"[DEBUG-PREDICTION] Generating prediction based on the latest draw: {latest_draw}")
+    # --- FIX ---
+    # The history for calculating features should not include the latest draw (0) or the base draw (1).
+    history_for_features = historical_draws[2:]
+
+    logging.debug(f"[DEBUG-PREDICTION] Generating prediction based on the base draw: {base_draw_for_prediction}")
     
-    # Unpack single bonus
-    base_mains, bonus = latest_draw[1], latest_draw[2]
-    # Call the strategy to get the numbers
-    prediction = predict_strategy(base_mains, bonus, historical_draws[1:])
+    # Unpack the single bonus from the correct base draw
+    base_mains, bonus = base_draw_for_prediction[1], base_draw_for_prediction[2]
     
-    # MODIFIED: If predict_strategy failed (returned None), we can't proceed.
+    # Call the strategy to get the numbers, using the correct history slice
+    prediction = predict_strategy(base_mains, bonus, history_for_features)
+    
     if prediction is None:
-        # DEBUGGING: This log indicates that the model-based strategy failed.
         logging.error("[DEBUG-PREDICTION] Prediction returned None from predict_strategy. Aborting live prediction generation.")
         return None
 
-    # MODIFIED: Since the fallback is removed, the strategy is always ML.
     strategy_name = "ml_random_forest_firestore"
     
     result = {'strategy_used': strategy_name, 'prediction': prediction}
@@ -1025,7 +1030,7 @@ def scrape_and_process_draws_job():
         prediction_payload = {
             'target_draw_time': get_next_target_draw_time(datetime.now(harare_tz)), 
             'strategy_used': live_prediction_result['strategy_used'], 
-            'booster': historical_draws[0][2], # Get the single bonus from the latest draw
+            'booster': historical_draws[1][2], # Get bonus from the correct base draw
             'prediction': live_prediction_result['prediction'], 
             'actual_mains': [], 
             'actual_booster': None, 
