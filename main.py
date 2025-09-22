@@ -172,11 +172,9 @@ def send_telegram_message(message, chat_id):
         return False, f"Failed to send Telegram message: {e}"
 
 # --- Web Scraping and Data Processing ---
-# --- FIX: Added URL for Teatime results ---
 UK_49S_LUNCHTIME_URL = "https://za.lottonumbers.com/uk-49s-lunchtime/past-results"
 UK_49S_TEATIME_URL = "https://za.lottonumbers.com/uk-49s-teatime/past-results"
 
-# --- FIX: Modified function to be generic for any draw type and to create a correct timestamp ---
 def fetch_draws_from_website(url, draw_type):
     """
     Scrapes historical draws from a specified URL and associates them with a draw type.
@@ -207,18 +205,15 @@ def fetch_draws_from_website(url, draw_type):
                 date_str = date_td.text.strip()
                 date_str = re.sub(r'(\d+)(st|nd|rd|th)', r'\1', date_str)
                 
-                # This creates a date object at midnight, which we'll correct
                 naive_draw_date = datetime.strptime(date_str, '%A %d %B %Y')
 
-                # Set the correct time based on the draw type
                 if draw_type == 'Lunchtime':
                     draw_time = naive_draw_date.replace(hour=13, minute=50)
                 elif draw_type == 'Teatime':
                     draw_time = naive_draw_date.replace(hour=18, minute=50)
-                else: # Default to noon if type is unknown
+                else:
                     draw_time = naive_draw_date.replace(hour=12, minute=0)
 
-                # Create a proper timezone-aware timestamp
                 aware_draw_timestamp = harare_tz.localize(draw_time)
 
             except (AttributeError, ValueError) as e:
@@ -253,7 +248,6 @@ def fetch_draws_from_website(url, draw_type):
         logging.error(error_msg)
         return [], error_msg
 
-# --- FIX: Simplified storage logic to use unique document IDs ---
 def store_draws_to_firestore(draws_data):
     """
     Stores a list of draw data to Firestore, using a unique document ID
@@ -265,20 +259,22 @@ def store_draws_to_firestore(draws_data):
     draws_collection = get_draws_collection_ref()
     batch = db.batch()
     
-    # To check for existence, we fetch all potential doc IDs first.
-    # This is more efficient than checking one by one inside the loop.
     doc_ids_to_check = [f"{ts.strftime('%Y-%m-%d')}_{dtype}" for ts, _, _, dtype in draws_data]
-    existing_docs = draws_collection.where(FieldFilter.document_id(), 'in', doc_ids_to_check).stream()
+    
+    if not doc_ids_to_check:
+        return 0
+
+    # CORRECTED LINE: Use firestore.DOCUMENT_ID to query by the document's name
+    existing_docs = draws_collection.where(firestore.DOCUMENT_ID, 'in', doc_ids_to_check).stream()
     existing_doc_ids = {doc.id for doc in existing_docs}
     
     inserted_count = 0
 
     for timestamp, mains, bonus, draw_type in draws_data:
-        # Create a unique ID like "2025-09-22_Teatime"
         doc_id = f"{timestamp.strftime('%Y-%m-%d')}_{draw_type}"
 
         if doc_id in existing_doc_ids:
-            continue # Skip if this exact draw already exists
+            continue
 
         doc_ref = draws_collection.document(doc_id)
         try:
@@ -288,7 +284,7 @@ def store_draws_to_firestore(draws_data):
                 'booster': bonus, 
                 'draw_date': timestamp.strftime('%Y-%m-%d'),
                 'draw_type': draw_type, 
-                'timestamp': timestamp # Store the full, correct timestamp
+                'timestamp': timestamp
             }
             batch.set(doc_ref, payload)
             inserted_count += 1
@@ -963,7 +959,6 @@ def backtest_results_page():
 scheduler = BackgroundScheduler(daemon=True, timezone=harare_tz)
 HISTORY_WINDOW_DAYS = 90
 
-# --- FIX: Major rewrite of the main job to handle both Lunchtime and Teatime draws ---
 def scrape_and_process_draws_job():
     logging.info("--- JOB START: Scrape and Process Draws ---")
 
@@ -972,10 +967,9 @@ def scrape_and_process_draws_job():
     now = datetime.now(harare_tz)
     url_to_fetch, draw_type_to_fetch = None, None
 
-    # Logic to decide which draw's results are most recently available
-    if now.hour >= 19: # After 7 PM, the Teatime draw (18:50) is the latest
+    if now.hour >= 19:
         url_to_fetch, draw_type_to_fetch = UK_49S_TEATIME_URL, 'Teatime'
-    elif now.hour >= 14: # Between 2 PM and 7 PM, the Lunchtime draw (13:50) is the latest
+    elif now.hour >= 14:
         url_to_fetch, draw_type_to_fetch = UK_49S_LUNCHTIME_URL, 'Lunchtime'
     else:
         logging.info("Not time to fetch new draw results yet. Exiting job.")
@@ -1172,11 +1166,7 @@ def send_results_and_hits_job():
 # Schedule All Jobs
 scheduler = BackgroundScheduler(daemon=True, timezone=harare_tz)
 
-# --- FIX: Adjusted cron times to logically capture both draws ---
-# This single job will now run after each draw and decide what to do.
 scheduler.add_job(scrape_and_process_draws_job, 'cron', hour='15,20', minute='15', id='scrape_process_job', replace_existing=True)
-
-# Other jobs remain unchanged
 scheduler.add_job(precompute_successful_bonuses_job, 'cron', hour='3', minute='0', id='precompute_bonuses_job', replace_existing=True)
 scheduler.add_job(send_prediction_alerts_job, 'cron', hour='13,18', minute='30', id='send_prediction_alerts_job', replace_existing=True)
 scheduler.add_job(send_results_and_hits_job, 'cron', hour='15,20', minute='30', id='send_results_hits_job', replace_existing=True)
