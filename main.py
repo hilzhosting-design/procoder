@@ -252,6 +252,11 @@ def fetch_draws_from_website(url, draw_type):
         return [], error_msg
 
 
+# Add this line to your existing imports at the top of the file
+#from google.cloud import firestore
+
+# ... other imports
+
 def store_draws_to_firestore(draws_data):
     """
     Stores a list of draw data to Firestore, using a unique document ID
@@ -268,7 +273,7 @@ def store_draws_to_firestore(draws_data):
     if not doc_ids_to_check:
         return 0
 
-    # CORRECTED LINE: Use a FieldFilter with the google.cloud.firestore.DOCUMENT_ID
+    # This line is correct, provided 'from google.cloud import firestore' is at the top of your script.
     existing_docs = draws_collection.where(filter=FieldFilter(firestore.DOCUMENT_ID, 'in', doc_ids_to_check)).stream()
     existing_doc_ids = {doc.id for doc in existing_docs}
     
