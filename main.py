@@ -253,8 +253,8 @@ def fetch_draws_from_website():
 
 def store_draws_to_firestore(draws_data):
     """
-    Stores a list of draw data to Firestore using an efficient batched write
-    and a single query to check for duplicates.
+    Stores a list of draw data to Firestore, chunking queries to respect
+    Firestore's 30-value limit for the 'IN' operator.
     """
     if db is None or not draws_data:
         return 0
@@ -263,24 +263,31 @@ def store_draws_to_firestore(draws_data):
     batch = db.batch()
     inserted_count = 0
 
-    # --- START: EFFICIENT DUPLICATE CHECK ---
-    # 1. Get all the unique draw date strings from the scraped data
+    # --- START: CHUNKED DUPLICATE CHECK ---
     scraped_dates = {t.strftime('%Y-%m-%d') for t, _, _, _ in draws_data}
+    dates_to_check = list(scraped_dates)
+    existing_dates_set = set()
 
-    # 2. Perform a SINGLE query to find which of those dates already exist
-    existing_docs = draws_collection.where(
-        filter=FieldFilter('draw_date', 'in', list(scraped_dates))
-    ).stream()
+    # 1. Firestore 'in' queries are limited to 30 values, so we process in chunks.
+    for i in range(0, len(dates_to_check), 30):
+        # 2. Get a chunk of up to 30 dates.
+        chunk = dates_to_check[i:i + 30]
+        
+        # 3. Perform the query on the smaller chunk.
+        existing_docs = draws_collection.where(
+            filter=FieldFilter('draw_date', 'in', chunk)
+        ).stream()
+
+        # 4. Add the results from this chunk to our main set.
+        for doc in existing_docs:
+            existing_dates_set.add(doc.to_dict()['draw_date'])
     
-    # 3. Create a set of existing dates for instant lookups
-    existing_dates_set = {doc.to_dict()['draw_date'] for doc in existing_docs}
     logging.info(f"Found {len(existing_dates_set)} existing draws in the current batch range.")
-    # --- END: EFFICIENT DUPLICATE CHECK ---
+    # --- END: CHUNKED DUPLICATE CHECK ---
 
     for timestamp, mains, bonus, draw_type in draws_data:
         draw_date_str = timestamp.strftime('%Y-%m-%d')
 
-        # 4. Check against the set (very fast) instead of making a DB query
         if draw_date_str not in existing_dates_set:
             try:
                 payload = {
