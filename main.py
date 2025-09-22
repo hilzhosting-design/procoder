@@ -258,16 +258,20 @@ def store_draws_to_firestore(draws_data):
 
     draws_collection = get_draws_collection_ref()
     batch = db.batch()
-    
+
     doc_ids_to_check = [f"{ts.strftime('%Y-%m-%d')}_{dtype}" for ts, _, _, dtype in draws_data]
-    
+
     if not doc_ids_to_check:
         return 0
 
-    # CORRECTED LINE: Use firestore.DOCUMENT_ID to query by the document's name
-    existing_docs = draws_collection.where(firestore.DOCUMENT_ID, 'in', doc_ids_to_check).stream()
-    existing_doc_ids = {doc.id for doc in existing_docs}
-    
+    # This corrected block replaces the original query that was causing the error.
+    # It checks for the existence of each document by its ID.
+    existing_doc_ids = set()
+    for doc_id in doc_ids_to_check:
+        doc_ref = draws_collection.document(doc_id)
+        if doc_ref.get().exists:
+            existing_doc_ids.add(doc_id)
+
     inserted_count = 0
 
     for timestamp, mains, bonus, draw_type in draws_data:
@@ -281,9 +285,9 @@ def store_draws_to_firestore(draws_data):
             payload = {
                 'main1': mains[0], 'main2': mains[1], 'main3': mains[2],
                 'main4': mains[3], 'main5': mains[4], 'main6': mains[5],
-                'booster': bonus, 
+                'booster': bonus,
                 'draw_date': timestamp.strftime('%Y-%m-%d'),
-                'draw_type': draw_type, 
+                'draw_type': draw_type,
                 'timestamp': timestamp
             }
             batch.set(doc_ref, payload)
@@ -298,7 +302,7 @@ def store_draws_to_firestore(draws_data):
         except Exception as e:
             logging.error(f"Failed to commit batch to Firestore: {e}")
             return 0
-    
+
     return inserted_count
     
 def get_historical_draws_from_firestore(limit=None, history_window_days=None):
