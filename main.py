@@ -253,51 +253,58 @@ def fetch_draws_from_website():
 
 def store_draws_to_firestore(draws_data):
     """
-    Stores a list of draw data to Firestore using an efficient batched write.
+    Stores a list of draw data to Firestore using an efficient batched write
+    and a single query to check for duplicates.
     """
     if db is None or not draws_data:
         return 0
-        
+
     draws_collection = get_draws_collection_ref()
     batch = db.batch()
     inserted_count = 0
+
+    # --- START: EFFICIENT DUPLICATE CHECK ---
+    # 1. Get all the unique draw date strings from the scraped data
+    scraped_dates = {t.strftime('%Y-%m-%d') for t, _, _, _ in draws_data}
+
+    # 2. Perform a SINGLE query to find which of those dates already exist
+    existing_docs = draws_collection.where(
+        filter=FieldFilter('draw_date', 'in', list(scraped_dates))
+    ).stream()
     
+    # 3. Create a set of existing dates for instant lookups
+    existing_dates_set = {doc.to_dict()['draw_date'] for doc in existing_docs}
+    logging.info(f"Found {len(existing_dates_set)} existing draws in the current batch range.")
+    # --- END: EFFICIENT DUPLICATE CHECK ---
+
     for timestamp, mains, bonus, draw_type in draws_data:
         draw_date_str = timestamp.strftime('%Y-%m-%d')
-        
-        # NOTE: This check still requires one read per item. For a high-performance
-        # ingest, you might consider handling duplicates after the write.
-        # However, for 179 items, this is generally acceptable.
-        query = draws_collection.where(filter=FieldFilter('draw_date', '==', draw_date_str)).where(filter=FieldFilter('draw_type', '==', draw_type)).limit(1).get()
-        
-        if not list(query):
+
+        # 4. Check against the set (very fast) instead of making a DB query
+        if draw_date_str not in existing_dates_set:
             try:
                 payload = {
-                    'main1': mains[0], 'main2': mains[1], 'main3': mains[2], 
+                    'main1': mains[0], 'main2': mains[1], 'main3': mains[2],
                     'main4': mains[3], 'main5': mains[4], 'main6': mains[5],
-                    'booster': bonus, 'draw_date': draw_date_str, 
+                    'booster': bonus, 'draw_date': draw_date_str,
                     'draw_type': draw_type, 'timestamp': timestamp
                 }
-                
-                # Instead of adding directly, add the operation to the batch
                 new_doc_ref = draws_collection.document()
                 batch.set(new_doc_ref, payload)
-                
                 inserted_count += 1
             except Exception as e:
                 logging.error(f"Failed to prepare draw for batch: {e}")
 
-    # If there are any new items to insert, commit them all at once
     if inserted_count > 0:
         try:
             batch.commit()
             logging.info(f"Successfully committed {inserted_count} new draws to Firestore.")
         except Exception as e:
             logging.error(f"Failed to commit batch to Firestore: {e}")
-            return 0 # Return 0 on commit failure
+            return 0
 
     return inserted_count
-
+    
 def get_historical_draws_from_firestore(limit=None, history_window_days=None):
     if db is None: return []
     draws_collection = get_draws_collection_ref()
