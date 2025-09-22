@@ -20,8 +20,14 @@ import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
 
 # Google Cloud Imports
-from google.cloud import storage
-from google.api_core.exceptions import NotFound
+#from google.cloud import storage
+#from google.api_core.exceptions import NotFound
+
+
+import firebase_admin
+from firebase_admin import credentials, firestore, auth as firebase_auth_module
+from google.cloud.firestore_v1.base_query import FieldFilter
+from google.cloud.firestore_v1.base_client import DocumentSnapshot
 
 # Set logging level to DEBUG to capture all detailed messages
 logging.basicConfig(level=logging.DEBUG, format='[%(asctime)s] %(levelname)s: %(message)s')
