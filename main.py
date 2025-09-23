@@ -23,6 +23,7 @@ from sklearn.ensemble import RandomForestClassifier
 from google.cloud import storage
 from google.api_core.exceptions import NotFound
 from google.cloud import firestore
+from google.cloud.firestore import FieldPath
 
 
 
@@ -274,28 +275,26 @@ def store_draws_to_firestore(draws_data):
     if not doc_ids_to_check:
         return 0
 
-    # --- FIX START: Chunk the query to respect Firestore's 30-value limit for 'IN' ---
     existing_doc_ids = set()
-    chunk_size = 30  # Firestore's limit for the 'IN' operator
+    chunk_size = 30
     
-    # Iterate over the list of document IDs in chunks of 30
     for i in range(0, len(doc_ids_to_check), chunk_size):
         chunk = doc_ids_to_check[i:i + chunk_size]
         
-        # Query for the current chunk
         if chunk:
-            existing_docs_chunk = draws_collection.where(filter=FieldFilter("__name__", 'in', chunk)).stream()
-            # Add the found document IDs to the set
+            # --- FIX: Use FieldPath.document_id() instead of the string "__name__" ---
+            existing_docs_chunk = draws_collection.where(
+                filter=FieldFilter(FieldPath.document_id(), 'in', chunk)
+            ).stream()
+            
             for doc in existing_docs_chunk:
                 existing_doc_ids.add(doc.id)
-    # --- FIX END ---
     
     inserted_count = 0
 
     for timestamp, mains, bonus, draw_type in draws_data:
         doc_id = f"{timestamp.strftime('%Y-%m-%d')}_{draw_type}"
 
-        # Check against the complete set of existing IDs gathered from all chunks
         if doc_id in existing_doc_ids:
             continue
 
