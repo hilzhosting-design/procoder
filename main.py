@@ -1176,7 +1176,7 @@ def send_results_and_hits_job():
 scheduler = BackgroundScheduler(daemon=True, timezone=harare_tz)
 
 #scheduler.add_job(scrape_and_process_draws_job, 'cron', hour='15,20', minute='15', id='scrape_process_job', replace_existing=True)
-scheduler.add_job(scrape_and_process_draws_job, 'cron', hour='05,20', minute='11', id='scrape_process_job', replace_existing=True)
+scheduler.add_job(scrape_and_process_draws_job, 'cron', hour='05,20', minute='31', id='scrape_process_job', replace_existing=True)
 scheduler.add_job(precompute_successful_bonuses_job, 'cron', hour='3', minute='0', id='precompute_bonuses_job', replace_existing=True)
 scheduler.add_job(send_prediction_alerts_job, 'cron', hour='13,18', minute='30', id='send_prediction_alerts_job', replace_existing=True)
 scheduler.add_job(send_results_and_hits_job, 'cron', hour='15,20', minute='30', id='send_results_hits_job', replace_existing=True)
