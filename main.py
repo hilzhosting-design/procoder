@@ -273,8 +273,8 @@ def store_draws_to_firestore(draws_data):
     if not doc_ids_to_check:
         return 0
 
-    # This line is correct, provided 'from google.cloud import firestore' is at the top of your script.
-    existing_docs = draws_collection.where(filter=FieldFilter(firestore.DOCUMENT_ID, 'in', doc_ids_to_check)).stream()
+    # CORRECTED: Use the special string "__name__" to refer to the document ID.
+    existing_docs = draws_collection.where(filter=FieldFilter("__name__", 'in', doc_ids_to_check)).stream()
     existing_doc_ids = {doc.id for doc in existing_docs}
     
     inserted_count = 0
