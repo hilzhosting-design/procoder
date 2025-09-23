@@ -505,17 +505,21 @@ def generate_live_prediction(historical_draws):
     base_draw_for_prediction = historical_draws[1] 
     history_for_features = historical_draws[2:]
 
-    logging.debug(f"[DEBUG-PREDICTION] Generating prediction based on the base draw: {base_draw_for_prediction}")
+    # ### ADD THIS LINE ###
+    logging.info(f"--- PREDICTION INPUT: Using base draw {base_draw_for_prediction[3]} from {base_draw_for_prediction[0].strftime('%Y-%m-%d')} with mains {base_draw_for_prediction[1]} to generate the next prediction.")
     
     base_mains, bonus = base_draw_for_prediction[1], base_draw_for_prediction[2]
     
     prediction = predict_strategy(base_mains, bonus, history_for_features)
     
+    # ### ADD THIS LINE ###
+    logging.info(f"--- PREDICTION OUTPUT: The ML model generated the following prediction: {prediction}")
+
     if prediction is None:
         logging.error("[DEBUG-PREDICTION] Prediction returned None from predict_strategy. Aborting live prediction generation.")
         return None
 
-    strategy_name = "ml_random_forest_firestore"
+    strategy_name = "ml_HILZ_forest_firestore"
     
     result = {'strategy_used': strategy_name, 'prediction': prediction}
     logging.info(f"[DEBUG-PREDICTION] Successfully generated live prediction: {result}")
