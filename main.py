@@ -23,7 +23,7 @@ from sklearn.ensemble import RandomForestClassifier
 from google.cloud import storage
 from google.api_core.exceptions import NotFound
 from google.cloud import firestore
-from google.cloud.firestore import FieldPath
+#from google.cloud.firestore import FieldPath
 
 
 
