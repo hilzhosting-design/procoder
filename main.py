@@ -271,27 +271,29 @@ def store_draws_to_firestore(draws_data):
 
     draws_collection = get_draws_collection_ref()
     batch = db.batch()
-    
+
     doc_ids_to_check = [f"{ts.strftime('%Y-%m-%d')}_{dtype}" for ts, _, _, dtype in draws_data]
-    
+
     if not doc_ids_to_check:
         return 0
 
     existing_doc_ids = set()
     chunk_size = 30
-    
+
     for i in range(0, len(doc_ids_to_check), chunk_size):
         chunk = doc_ids_to_check[i:i + chunk_size]
         
         if chunk:
-            # --- FIX: Use FieldPath.document_id() instead of the string "__name__" ---
+            # FIX: Convert the list of string IDs to a list of DocumentReference objects
+            doc_refs_chunk = [draws_collection.document(doc_id) for doc_id in chunk]
+
             existing_docs_chunk = draws_collection.where(
-                filter=FieldFilter(FieldPath.document_id(), 'in', chunk)
+                filter=FieldFilter(FieldPath.document_id(), 'in', doc_refs_chunk)
             ).stream()
-            
+
             for doc in existing_docs_chunk:
                 existing_doc_ids.add(doc.id)
-    
+
     inserted_count = 0
 
     for timestamp, mains, bonus, draw_type in draws_data:
@@ -305,9 +307,9 @@ def store_draws_to_firestore(draws_data):
             payload = {
                 'main1': mains[0], 'main2': mains[1], 'main3': mains[2],
                 'main4': mains[3], 'main5': mains[4], 'main6': mains[5],
-                'booster': bonus, 
+                'booster': bonus,
                 'draw_date': timestamp.strftime('%Y-%m-%d'),
-                'draw_type': draw_type, 
+                'draw_type': draw_type,
                 'timestamp': timestamp
             }
             batch.set(doc_ref, payload)
@@ -322,7 +324,7 @@ def store_draws_to_firestore(draws_data):
         except Exception as e:
             logging.error(f"Failed to commit batch to Firestore: {e}")
             return 0
-    
+
     return inserted_count
     
 def get_historical_draws_from_firestore(limit=None, history_window_days=None):
