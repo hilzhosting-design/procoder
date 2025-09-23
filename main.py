@@ -527,7 +527,7 @@ def generate_live_prediction(historical_draws):
         logging.error("[DEBUG-PREDICTION] Prediction returned None from predict_strategy. Aborting live prediction generation.")
         return None
 
-    strategy_name = "ml_random_forest_firestore"
+    strategy_name = "ml_by_hilz_firestore"
     
     result = {'strategy_used': strategy_name, 'prediction': prediction}
     logging.info(f"[DEBUG-PREDICTION] Successfully generated live prediction: {result}")
