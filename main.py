@@ -498,12 +498,13 @@ def predict_strategy(base_mains, bonus, historical_draws, target_size=4):
 
 def generate_live_prediction(historical_draws):
     """Generates the main prediction result dictionary."""
-    if not historical_draws or len(historical_draws) < 3:
-        logging.warning(f"[DEBUG-PREDICTION] Not enough historical draws to generate a prediction. Need at least 3, got {len(historical_draws)}.")
+    if not historical_draws or len(historical_draws) < 2:
+        logging.warning(f"[DEBUG-PREDICTION] Not enough historical draws to generate a prediction. Need at least 2, got {len(historical_draws)}.")
         return None
 
-    base_draw_for_prediction = historical_draws[1] 
-    history_for_features = historical_draws[2:]
+    # MODIFIED: Use the latest draw as the base for the next prediction
+    base_draw_for_prediction = historical_draws[0]
+    history_for_features = historical_draws[1:]
 
     # ### ADD THIS LINE ###
     logging.info(f"--- PREDICTION INPUT: Using base draw {base_draw_for_prediction[3]} from {base_draw_for_prediction[0].strftime('%Y-%m-%d')} with mains {base_draw_for_prediction[1]} to generate the next prediction.")
@@ -1039,11 +1040,24 @@ def scrape_and_process_draws_job(force_run=False):
         historical_draws = get_historical_draws_from_firestore(history_window_days=HISTORY_WINDOW_DAYS)
         
         if historical_draws:
-            logging.info(f"Retrieved {len(historical_draws)} historical draws for prediction.")
-            live_prediction_result = generate_live_prediction(historical_draws)
+            # Sort the historical draws to ensure the latest draw is at index 0
+            historical_draws.sort(key=lambda x: x[0], reverse=True)
             
+            logging.info(f"Retrieved {len(historical_draws)} historical draws for prediction.")
+            
+            # MODIFIED: Use the latest draw as the base for the next prediction
+            if len(historical_draws) >= 2:
+                base_draw_for_prediction = historical_draws[0]
+                history_for_features = historical_draws[1:]
+                
+                # RE-MODIFIED: Call the generate_live_prediction function with the correct arguments
+                live_prediction_result = generate_live_prediction(historical_draws)
+            else:
+                logging.warning("Not enough historical draws to generate a live prediction.")
+                live_prediction_result = None
+
             if live_prediction_result:
-                base_draw_for_payload = historical_draws[1]
+                base_draw_for_payload = historical_draws[0]
                 prediction_payload = {
                     'target_draw_time': next_target_time,
                     'strategy_used': live_prediction_result['strategy_used'],
