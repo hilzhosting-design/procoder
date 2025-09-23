@@ -261,6 +261,7 @@ def store_draws_to_firestore(draws_data):
     """
     Stores a list of draw data to Firestore, using a unique document ID
     to prevent duplicates for different draws on the same day.
+    This version handles Firestore's 'IN' query limit by chunking requests.
     """
     if db is None or not draws_data:
         return 0
@@ -273,15 +274,28 @@ def store_draws_to_firestore(draws_data):
     if not doc_ids_to_check:
         return 0
 
-    # CORRECTED: Use the special string "__name__" to refer to the document ID.
-    existing_docs = draws_collection.where(filter=FieldFilter("__name__", 'in', doc_ids_to_check)).stream()
-    existing_doc_ids = {doc.id for doc in existing_docs}
+    # --- FIX START: Chunk the query to respect Firestore's 30-value limit for 'IN' ---
+    existing_doc_ids = set()
+    chunk_size = 30  # Firestore's limit for the 'IN' operator
+    
+    # Iterate over the list of document IDs in chunks of 30
+    for i in range(0, len(doc_ids_to_check), chunk_size):
+        chunk = doc_ids_to_check[i:i + chunk_size]
+        
+        # Query for the current chunk
+        if chunk:
+            existing_docs_chunk = draws_collection.where(filter=FieldFilter("__name__", 'in', chunk)).stream()
+            # Add the found document IDs to the set
+            for doc in existing_docs_chunk:
+                existing_doc_ids.add(doc.id)
+    # --- FIX END ---
     
     inserted_count = 0
 
     for timestamp, mains, bonus, draw_type in draws_data:
         doc_id = f"{timestamp.strftime('%Y-%m-%d')}_{draw_type}"
 
+        # Check against the complete set of existing IDs gathered from all chunks
         if doc_id in existing_doc_ids:
             continue
 
