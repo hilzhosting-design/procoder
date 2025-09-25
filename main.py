@@ -358,9 +358,9 @@ def get_latest_actual_draw():
 
 # --- ML Feature Helpers ---
 def super_hybrid_pool(bonus):
-    mirror = 50 - bonus
-    pool = list(set([bonus, mirror, bonus + 1, bonus - 1, bonus + 10, bonus - 10]))
-    return [n for n in pool if 1 <= n <= 50]
+    mirror = 49 - bonus
+    pool = list(set([bonus, mirror, bonus + 1, bonus - 8, bonus - 19, bonus - 30, bonus - 10]))
+    return [n for n in pool if 1 <= n <= 49]
 
 def get_hot_numbers(historical_draws, window=15, count=5):
     if not historical_draws or len(historical_draws) < window: return []
@@ -394,7 +394,7 @@ def create_feature_dataset(historical_draws):
         overdue_pool = get_overdue_numbers(prediction_history)
         pair_pool = get_strongest_pairs(prediction_history)
         bonus_pool = set(super_hybrid_pool(bonus))
-        for num in range(1, 51):
+        for num in range(1, 50):
             features.append({
                 'number': num, 
                 'is_hot': 1 if num in hot_pool else 0, 
