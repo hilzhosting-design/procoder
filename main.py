@@ -401,8 +401,6 @@ def create_feature_dataset(historical_draws):
                 'is_overdue': 1 if num in overdue_pool else 0, 
                 'is_in_pair': 1 if num in pair_pool else 0, 
                 'is_in_bonus_pool': 1 if num in bonus_pool else 0, 
-                'was_in_prev_mains': 1 if num in base_mains else 0, 
-                'was_in_prev_bonus': 1 if num == bonus else 0, 
                 'was_winner': 1 if num in target_draw_mains else 0
             })
     df = pd.DataFrame(features)
@@ -484,9 +482,7 @@ def predict_strategy(base_mains, bonus, historical_draws, target_size=4):
         'is_hot': 1 if num in hot_pool else 0, 
         'is_overdue': 1 if num in overdue_pool else 0, 
         'is_in_pair': 1 if num in pair_pool else 0, 
-        'is_in_bonus_pool': 1 if num in bonus_pool else 0, 
-        'was_in_prev_mains': 1 if num in base_mains else 0, 
-        'was_in_prev_bonus': 1 if num == bonus else 0
+        'is_in_bonus_pool': 1 if num in bonus_pool else 0
     } for num in range(1, 51)]
     
     df_pred = pd.DataFrame(prediction_features)
@@ -908,7 +904,7 @@ def backtest_strategy_job():
                 hot_pool, overdue_pool, pair_pool = get_hot_numbers(history_for_features), get_overdue_numbers(history_for_features), get_strongest_pairs(history_for_features)
                 bonus_pool = set(super_hybrid_pool(bonus))
                 
-                prediction_features = [{'is_hot': 1 if num in hot_pool else 0, 'is_overdue': 1 if num in overdue_pool else 0, 'is_in_pair': 1 if num in pair_pool else 0, 'is_in_bonus_pool': 1 if num in bonus_pool else 0, 'was_in_prev_mains': 1 if num in base_mains else 0, 'was_in_prev_bonus': 1 if num == bonus else 0} for num in range(1, 51)]
+                prediction_features = [{'is_hot': 1 if num in hot_pool else 0, 'is_overdue': 1 if num in overdue_pool else 0, 'is_in_pair': 1 if num in pair_pool else 0, 'is_in_bonus_pool': 1 if num in bonus_pool else 0} for num in range(1, 51)]
                 df_pred = pd.DataFrame(prediction_features)
                 
                 probabilities = temp_model.predict_proba(df_pred)[:, 1]
@@ -918,7 +914,6 @@ def backtest_strategy_job():
                 target_timestamp, target_mains, target_bonus, target_draw_type = target_actual_draw
                 hits = len(set(predicted_mains).intersection(set(target_mains)))
                 
-                # *** FIX: Corrected key from 'actual_booster' to 'actual_mains' ***
                 results.append({
                     'target_draw_time': target_timestamp.isoformat(), 
                     'draw_date': target_timestamp.strftime('%Y-%m-%d'), 
