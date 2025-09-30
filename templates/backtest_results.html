@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>HBet 5/50 - Backtest Results</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%231a1a1a'/><text x='50%' y='50%' dominant-baseline='middle' text-anchor='middle' font-family='Inter, sans-serif' font-size='12' fill='white'>H</text></svg>" />
+    <meta
+        name="description"
+        content="Review historical backtest results for Gosloto 5/50 predictions."
+    />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        /* Custom CSS for enhanced aesthetics */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&display=swap');
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0d1117; /* Darker, GitHub-like background */
+            color: #e2e8f0; /* Light gray text */
+            margin: 0;
+            padding: 0;
+            overflow-x: hidden; /* Prevent horizontal scroll */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1200px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        /* Header styles */
+        header {
+            background-color: #161b22; /* Slightly lighter dark background */
+            border-bottom: 1px solid #21262d;
+            padding: 1rem 0;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+            width: 100%;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
+
+        nav a {
+            color: #58a6ff; /* GitHub link blue */
+            transition: color 0.2s ease-in-out;
+        }
+
+        nav a:hover {
+            color: #89b4f8; /* Lighter blue on hover */
+        }
+
+        /* Main content sections */
+        main {
+            flex-grow: 1;
+            width: 100%; /* Ensure it takes full width within container */
+            max-width: 1200px; /* Limit its max width */
+            margin: 0 auto; /* Center main itself */
+            padding-top: 2rem;
+            padding-bottom: 2rem;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column; /* Ensure it stacks children vertically */
+            align-items: center; /* Center children horizontally within main */
+        }
+
+        section {
+            background-color: #161b22; /* Dark section background */
+            border-radius: 0.75rem; /* Rounded corners */
+            padding: 2rem; /* Keep padding here for content inside section */
+            margin-bottom: 1.5rem;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+            border: 1px solid #21262d; /* Subtle border */
+            max-width: 896px; /* Equivalent to Tailwind's max-w-4xl */
+            width: 100%; /* Ensure it takes full width up to max-width */
+        }
+
+        h1,
+        h2,
+        h3 {
+            color: #c9d1d9; /* Light heading color */
+            font-weight: 700;
+        }
+
+        /* Specific styles for lottery numbers - used for prediction display */
+        .lottery-number {
+            display: inline-flex;
+            justify-content: center;
+            align-items: center;
+            width: 40px;
+            height: 40px;
+            background-color: #30363d; /* Darker circle background */
+            color: #c9d1d9;
+            border-radius: 50%;
+            font-weight: 600;
+            margin: 0.25rem;
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.6);
+            border: 1px solid #444c56;
+        }
+
+        .bonus-number {
+            background-color: #238636; /* Green for bonus */
+            color: #ffffff;
+        }
+
+        /* Number balls in table - REVERTED TO PREVIOUS SMALLER SIZE */
+        .table-number-ball {
+            display: inline-flex;
+            justify-content: center;
+            align-items: center;
+            width: 30px; /* Reverted to previous size */
+            height: 30px; /* Reverted to previous size */
+            background-color: #30363d;
+            color: #c9d1d9;
+            border-radius: 50%;
+            font-weight: 500; /* Reverted to previous font-weight */
+            font-size: 0.8rem; /* Reverted to previous font-size */
+            margin: 0.1rem; /* Reverted to previous margin */
+            box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.6);
+            border: 1px solid #444c56;
+        }
+
+        .table-bonus-ball {
+            background-color: #238636; /* Green for bonus */
+            color: #ffffff;
+        }
+
+        .table-hit-number {
+            background-color: #2ea043; /* Lighter green for hits */
+            color: #ffffff;
+        }
+
+        /* Flash messages */
+        .flash-message {
+            padding: 1rem;
+            margin-bottom: 1.5rem;
+            border-radius: 0.75rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: 600;
+            color: #fff;
+            position: relative;
+            animation: fadeIn 0.5s ease-out;
+        }
+
+        .flash-message.success {
+            background-color: #28a745; /* Green for success */
+            border: 1px solid #218838;
+        }
+
+        .flash-message.error {
+            background-color: #dc3545; /* Red for error */
+            border: 1px solid #c82333;
+        }
+
+        .flash-message.info {
+            background-color: #17a2b8; /* Blue for info */
+            border: 1px solid #138496;
+        }
+
+        .flash-message .close-button {
+            background: none;
+            border: none;
+            color: #fff;
+            font-size: 1.2rem;
+            cursor: pointer;
+            position: absolute;
+            right: 0.75rem;
+            top: 50%;
+            transform: translateY(-50%);
+            padding: 0.5rem;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Buttons */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem;
+            font-weight: 600;
+            transition: all 0.2s ease-in-out;
+            cursor: pointer;
+            text-decoration: none; /* Ensure no underline for links styled as buttons */
+        }
+
+        .btn-primary {
+            background-color: #238636; /* GitHub green button */
+            color: #ffffff;
+            border: 1px solid rgba(240, 246, 252, 0.1);
+            box-shadow: 0 1px 0 rgba(27, 31, 35, 0.1);
+        }
+
+        .btn-primary:hover {
+            background-color: #2ea043;
+            box-shadow: 0 1px 0 rgba(27, 31, 35, 0.1),
+                0 0 0 3px rgba(46, 160, 67, 0.4);
+        }
+
+        .btn-secondary {
+            background-color: #30363d; /* Darker gray button */
+            color: #c9d1d9;
+            border: 1px solid #444c56;
+            box-shadow: 0 1px 0 rgba(27, 31, 35, 0.1);
+        }
+
+        .btn-secondary:hover {
+            background-color: #444c56;
+            box-shadow: 0 1px 0 rgba(27, 31, 35, 0.1),
+                0 0 0 3px rgba(68, 76, 86, 0.4);
+        }
+
+        .btn-danger {
+            background-color: #da3633; /* Red for destructive actions */
+            color: #ffffff;
+            border: 1px solid rgba(240, 246, 252, 0.1);
+        }
+
+        .btn-danger:hover {
+            background-color: #f85149;
+            box-shadow: 0 0 0 3px rgba(218, 54, 51, 0.4);
+        }
+
+        /* Footer styles */
+        footer {
+            background-color: #161b22;
+            border-top: 1px solid #21262d;
+            margin-top: auto; /* Pushes footer to the bottom */
+        }
+
+        /* Table specific styles for backtest results */
+        .table-container {
+            overflow-x: auto;
+            border-radius: 0.75rem;
+            border: 1px solid #21262d;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+            color: #c9d1d9;
+        }
+
+        th, td {
+            padding: 1rem;
+            text-align: left;
+            border-bottom: 1px solid #21262d;
+        }
+
+        thead th {
+            background-color: #21262d;
+            font-weight: 600;
+            color: #8b949e;
+            text-transform: uppercase;
+            font-size: 0.85rem;
+        }
+
+        tbody tr:nth-child(even) {
+            background-color: #1a202c;
+        }
+
+        tbody tr:hover {
+            background-color: #21262d;
+        }
+
+        tbody td:first-child {
+            border-top-left-radius: 0.75rem;
+            border-bottom-left-radius: 0.75rem;
+        }
+
+        tbody td:last-child {
+            border-top-right-radius: 0.75rem;
+            border-bottom-right-radius: 0.75rem;
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 768px) {
+            .lottery-number { /* This is for the main prediction display, not table */
+                width: 35px;
+                height: 35px;
+                font-size: 0.9rem;
+            }
+            .table-number-ball { /* Reverted to mobile size for table balls */
+                width: 25px;
+                height: 25px;
+                font-size: 0.7rem;
+            }
+
+            .btn {
+                padding: 0.6rem 1.2rem;
+                font-size: 0.9rem;
+            }
+
+            th, td {
+                padding: 0.75rem;
+            }
+            /* Hide specific columns on mobile */
+            .hide-on-mobile {
+                display: none;
+            }
+            .md\:table-cell {
+                display: table-cell; /* Override hidden for medium and up */
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100">
+    <div class="container mx-auto">
+        <!-- Header -->
+        <header class="bg-gray-800 text-white shadow-md rounded-b-xl mb-6">
+            <div
+                class="container mx-auto flex flex-col md:flex-row justify-between items-center py-4 px-6"
+            >
+                <a href="/" class="text-2xl font-bold text-green-400 mb-3 md:mb-0"
+                    >HBet 5/50</a
+                >
+                <nav class="space-x-4">
+                    <a href="/" class="hover:text-green-300 transition duration-200"
+                        >Home</a
+                    >
+                    <a
+                        href="/backtest_results"
+                        class="hover:text-green-300 transition duration-200"
+                        >Backtest Results</a
+                    >
+                    {% if not logged_in %}
+                    <a
+                        href="/login"
+                        class="bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded-lg transition duration-200"
+                        >Login</a
+                    >
+                    <a
+                        href="/register"
+                        class="bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg transition duration-200"
+                        >Register</a
+                    >
+                    {% else %}
+                    <a
+                        href="/telegram_settings"
+                        class="hover:text-green-300 transition duration-200"
+                        >Telegram Settings</a
+                    >
+                    {% if is_admin %}
+                    <a
+                        href="/admin_users"
+                        class="hover:text-green-300 transition duration-200"
+                        >Admin Panel</a
+                    >
+                    {% endif %}
+                    <a
+                        href="/logout"
+                        class="bg-red-600 hover:bg-red-700 text-white py-2 px-4 rounded-lg transition duration-200"
+                        >Logout</a
+                    >
+                    {% endif %}
+                </nav>
+            </div>
+        </header>
+
+        <!-- Flash Messages -->
+        <div class="w-full max-w-4xl mx-auto px-4">
+            {% with messages = get_flashed_messages(with_categories=true) %} {% if
+            messages %} {% for category, message in messages %}
+            <div class="flash-message {{ category }} relative">
+                <span>{{ message }}</span>
+                <button class="close-button" aria-label="Close">&times;</button>
+            </div>
+            {% endfor %} {% endif %} {% endwith %}
+        </div>
+
+        <!-- Main Content -->
+        <main class="flex flex-col items-center py-8">
+            <section class="max-w-4xl bg-gray-800 p-6 rounded-xl shadow-lg mb-6">
+                <h2 class="text-3xl font-bold text-center text-white mb-6">Backtest Results</h2>
+
+                {% if is_limited_view %}
+                <div class="bg-yellow-700 text-white p-4 rounded-lg mb-6 text-center">
+                    <p class="text-lg font-semibold mb-2">You are currently viewing a limited backtesting history (last 5 draws).</p>
+                    <p class="mb-4">Unlock full access to all historical backtest results by subscribing!</p>
+                    <a href="{{ url_for('subscribe_info') }}" class="btn bg-yellow-500 hover:bg-yellow-600 text-white px-6 py-3 rounded-lg shadow-md">
+                        Subscribe Now!
+                    </a>
+                </div>
+                {% endif %}
+
+                <form method="POST" class="flex flex-col md:flex-row gap-4 mb-6 justify-center items-center" data-is-subscribed="{{ is_subscribed | tojson }}">
+                    <div class="flex flex-col">
+                        <label for="start_date" class="text-gray-300 mb-1">Start Date:</label>
+                        <input type="date" id="start_date" name="start_date" class="bg-gray-700 text-white p-2 rounded-md" value="{{ selected_start_date }}">
+                    </div>
+                    <div class="flex flex-col">
+                        <label for="end_date" class="text-gray-300 mb-1">End Date:</label>
+                        <input type="date" id="end_date" name="end_date" class="bg-gray-700 text-white p-2 rounded-md" value="{{ selected_end_date }}">
+                    </div>
+                    <button type="submit" class="btn btn-primary mt-auto px-6 py-2">Filter Results</button>
+                </form>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                    <div class="bg-gray-700 p-4 rounded-lg shadow-inner">
+                        <h3 class="text-xl font-semibold text-white mb-2">Overall Performance</h3>
+                        <p>Total Backtests: <span class="font-bold text-green-400">{{ total_backtests }}</span></p>
+                        <p>Average Hit Rate: <span class="font-bold text-green-400">{{ "%.2f"|format(average_hit_rate) }}%</span></p>
+                    </div>
+                    <div class="bg-gray-700 p-4 rounded-lg shadow-inner">
+                        <h3 class="text-xl font-semibold text-white mb-2">Hits Distribution</h3>
+                        <p>4 Hits: <span class="font-bold text-green-400">{{ total_4_hits }}</span></p>
+                        <p>3 Hits: <span class="font-bold text-green-400">{{ total_3_hits }}</span></p>
+                        <p>2 Hits: <span class="font-bold text-yellow-400">{{ total_2_hits }}</span></p>
+                        <p>1 Hit: <span class="font-bold text-orange-400">{{ total_1_hits }}</span></p>
+                        <p>0 Hits: <span class="font-bold text-red-400">{{ total_0_hits }}</span></p>
+                    </div>
+                </div>
+
+                <div class="table-container">
+                    <table class="min-w-full">
+                        <thead>
+                            <tr>
+                                <th>Draw Date</th>
+                                <th>Type</th> {# New column for Draw Type #}
+                                <th class="hide-on-mobile md:table-cell">Predicted Mains</th>
+                                <th class="hide-on-mobile md:table-cell">Actual Mains</th>
+                                <th class="hide-on-mobile md:table-cell">Actual Bonuses</th>
+                                <th>Hits</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for result in backtest_results %}
+                            <tr>
+                                <td>{{ result.draw_date }}</td>
+                                <td>{{ result.draw_type }}</td> {# Display Draw Type #}
+                                <td class="hide-on-mobile md:table-cell">
+                                    <div class="flex flex-wrap gap-1">
+                                        {% for num in result.prediction %}
+                                            <span class="table-number-ball">{{ num }}</span>
+                                        {% endfor %}
+                                    </div>
+                                </td>
+                                <td class="hide-on-mobile md:table-cell">
+                                    <div class="flex flex-wrap gap-1">
+                                        {% for num in result.actual_mains %}
+                                            <span class="table-number-ball {% if num in result.prediction %}table-hit-number{% endif %}">{{ num }}</span>
+                                        {% endfor %}
+                                    </div>
+                                </td>
+                                <td class="hide-on-mobile md:table-cell">
+                                    <div class="flex flex-wrap gap-1">
+                                        {% for num in result.actual_bonuses %}
+                                            <span class="table-number-ball table-bonus-ball">{{ num }}</span>
+                                        {% endfor %}
+                                    </div>
+                                </td>
+                                <td class="font-bold {% if result.hits == 4 %}text-green-400{% elif result.hits == 3 %}text-green-300{% elif result.hits == 2 %}text-yellow-400{% else %}text-red-400{% endif %}">
+                                    {{ result.hits }}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </main>
+
+        <!-- Footer -->
+        <footer class="w-full mt-20 py-10 bg-[#1a202c] rounded-t-xl shadow-inner text-center text-gray-400 text-sm">
+            <p>&copy; {{ now.year }} HBet 5/50. All rights reserved.</p>
+            <p class="mt-4 max-w-2xl mx-auto leading-relaxed">
+                Disclaimer: This application provides predictions based on historical data and algorithms. It does not guarantee winning any lottery. Please play responsibly.
+            </p>
+            <div class="flex flex-wrap justify-center space-x-6 mt-6 text-base font-medium">
+                <a href="#" class="hover:text-indigo-400 transition duration-200 ease-in-out">Privacy Policy</a>
+                <span class="text-gray-600">|</span>
+                <a href="#" class="hover:text-indigo-400 transition duration-200 ease-in-out">Terms of Service</a>
+                <span class="text-gray-600">|</span>
+                <a href="mailto:support@hilzhosting.com" class="hover:text-indigo-400 transition duration-200 ease-in-out">Contact Us</a>
+            </div>
+        </footer>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const closeButtons = document.querySelectorAll('.flash-message .close-button');
+            closeButtons.forEach((btn) =>
+                btn.addEventListener('click', () => {
+                    btn.closest('.flash-message').remove();
+                })
+            );
+
+            // Get the filter form
+            const filterForm = document.querySelector('form[method="POST"]');
+            if (filterForm) {
+                // Get the subscription status from the data attribute
+                // The | tojson filter in Jinja2 ensures it's a valid JSON boolean string
+                const isSubscribed = JSON.parse(filterForm.dataset.isSubscribed);
+
+                // If the user is not subscribed, prevent form submission and redirect
+                if (!isSubscribed) {
+                    filterForm.addEventListener('submit', (event) => {
+                        event.preventDefault(); // Stop the form from submitting
+                        window.location.href = "{{ url_for('subscribe_info') }}"; // Redirect to subscribe info page
+                    });
+                }
+            }
+        });
+    </script>
+</body>
+</html>
+

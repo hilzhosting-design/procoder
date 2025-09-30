@@ -309,52 +309,28 @@
             filter: blur(0.5px);
         }
 
-        /* --- START: Flash Message Styling Fix --- */
-        @keyframes slideDownFadeIn {
-            from {
-                opacity: 0;
-                transform: translate(-50%, -100%);
-            }
-            to {
-                opacity: 1;
-                transform: translate(-50%, 0);
-            }
-        }
-
-        .flash-container {
-            position: fixed;
-            top: 1.5rem;
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 1000;
-            width: 90%;
-            max-width: 500px;
-            display: flex;
-            flex-direction: column;
-            gap: 1rem;
-        }
-
+        /* Flash messages */
         .flash-message {
             padding: 1rem;
-            border-radius: 0.75rem;
+            margin-bottom: 1.5rem; /* More spacing */
+            border-radius: 0.75rem; /* More rounded */
             display: flex;
             justify-content: space-between;
             align-items: center;
             font-weight: 600;
             color: #fff;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
-            border: 1px solid;
-            animation: slideDownFadeIn 0.5s ease-out forwards;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+            border: 1px solid; /* Added for consistency */
         }
-        .flash-message.success { background-color: #059669; border-color: #047857;}
-        .flash-message.error { background-color: #dc2626; border-color: #b91c1c;}
-        .flash-message.info { background-color: #2563eb; border-color: #1d4ed8;}
-        .flash-message.warning { background-color: #d97706; border-color: #b45309;}
+        .flash-message.success { background-color: #059669; border-color: #047857;} /* Emerald-600 */
+        .flash-message.error { background-color: #dc2626; border-color: #b91c1c;} /* Red-600 */
+        .flash-message.info { background-color: #2563eb; border-color: #1d4ed8;} /* Blue-600 */
+        .flash-message.warning { background-color: #d97706; border-color: #b45309;} /* Orange-600 */
         .flash-message .close-button {
             background: none;
             border: none;
             color: inherit;
-            font-size: 1.75rem;
+            font-size: 1.75rem; /* Larger close button */
             cursor: pointer;
             margin-left: 1rem;
             line-height: 1;
@@ -364,7 +340,6 @@
         .flash-message .close-button:hover {
             opacity: 1;
         }
-        /* --- END: Flash Message Styling Fix --- */
 
         /* Section Styling */
         section {
@@ -494,10 +469,6 @@
             }
             th, td {
                 padding: 0.8rem;
-            }
-            /* Hide columns on mobile */
-            .mobile-hidden {
-                display: none;
             }
         }
 
@@ -655,21 +626,6 @@
     </style>
 </head>
 <body class="min-h-screen flex flex-col items-center p-4">
-
-    <!-- Flash Messages Container -->
-    <div class="flash-container">
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                {% for category, message in messages %}
-                    <div class="flash-message {{ category }}">
-                        <span>{{ message }}</span>
-                        <button class="close-button" aria-label="Close">&times;</button>
-                    </div>
-                {% endfor %}
-            {% endif %}
-        {% endwith %}
-    </div>
-
     <div class="max-w-6xl w-full flex flex-col space-y-10">
         <header class="text-center mb-10 p-6 bg-[#1a202c] rounded-xl shadow-xl">
             <h1 class="text-6xl font-extrabold text-white tracking-tight leading-tight mb-2">HBet 5/50</h1>
@@ -688,12 +644,25 @@
                         <li><a href="{{ url_for('telegram_settings') }}" class="btn btn-primary text-lg px-6 py-3 rounded-full shadow-md hover:shadow-lg transform hover:scale-105 transition duration-300 ease-in-out">Telegram Settings</a></li>
                         {% if is_admin %} {# Check for is_admin from session #}
                             <li><a href="{{ url_for('admin_panel') }}" class="btn btn-danger text-lg px-6 py-3 rounded-full shadow-md hover:shadow-lg transform hover:scale-105 transition duration-300 ease-in-out">Admin Panel</a></li>
-                        {% endif %}                      
-                        {# <li><a href="{{ url_for('backtest_results_page') }}" class="btn btn-success text-lg px-6 py-3 rounded-full shadow-md hover:shadow-lg transform hover:scale-105 transition duration-300 ease-in-out">Backtest Results</a></li> #}
+                        {% endif %}
+                        <li><a href="{{ url_for('backtest_results_page') }}" class="btn btn-success text-lg px-6 py-3 rounded-full shadow-md hover:shadow-lg transform hover:scale-105 transition duration-300 ease-in-out">Backtest Results</a></li>
                     {% endif %}
                 </ul>
             </nav>
         </header>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div class="w-full mb-4">
+                    {% for category, message in messages %}
+                        <div class="flash-message {{ category }}">
+                            <span>{{ message }}</span>
+                            <button class="close-button" aria-label="Close">&times;</button>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
 
         <main class="w-full space-y-4">
             <div class="w-full overflow-hidden bg-gradient-to-r from-purple-800 via-indigo-900 to-purple-800 py-2 shadow-lg">
@@ -817,10 +786,10 @@
                                 <table class="min-w-full bg-[#1f2937] rounded-lg shadow-md">
                                     <thead>
                                         <tr>
-                                            <th class="py-3 px-4 text-sm font-semibold text-gray-300 uppercase tracking-wider">Draw Date</th>
-                                            <th class="py-3 px-4 text-sm font-semibold text-gray-300 uppercase tracking-wider mobile-hidden">Predicted Mains</th>
-                                            <th class="py-3 px-4 text-sm font-semibold text-gray-300 uppercase tracking-wider mobile-hidden">Actual Mains</th>
-                                            <th class="py-3 px-4 text-sm font-semibold text-gray-300 uppercase tracking-wider mobile-hidden">Actual Bonuses</th>
+                                            <th class="py-3 px-4 text-sm font-semibold text-gray-300 uppercase tracking-wider">Target Draw</th>
+                                            <th class="py-3 px-4 text-sm font-semibold text-gray-300 uppercase tracking-wider">Predicted Mains</th>
+                                            <th class="py-3 px-4 text-sm font-semibold text-gray-300 uppercase tracking-wider">Actual Mains</th>
+                                            <th class="py-3 px-4 text-sm font-semibold text-gray-300 uppercase tracking-wider">Actual Bonuses</th>
                                             <th class="py-3 px-4 text-sm font-semibold text-gray-300 uppercase tracking-wider">Hits</th>
                                         </tr>
                                     </thead>
@@ -828,14 +797,14 @@
                                         {% for entry in live_prediction_history %}
                                         <tr>
                                             <td class="py-3 px-4 text-sm">{{ entry.target_draw_time.strftime('%Y-%m-%d %H:%M') if entry.target_draw_time else 'N/A' }}</td>
-                                            <td class="py-3 px-4 mobile-hidden">
+                                            <td class="py-3 px-4">
                                                 <div class="flex flex-wrap gap-1">
                                                     {% for num in entry.prediction %}
                                                         <div class="number-ball tiny-number-ball">{{ num }}</div>
                                                     {% endfor %}
                                                 </div>
                                             </td>
-                                            <td class="py-3 px-4 mobile-hidden">
+                                            <td class="py-3 px-4">
                                                 <div class="flex flex-wrap gap-1">
                                                     {% if entry.actual_mains %}
                                                         {% for num in entry.actual_mains %}
@@ -846,7 +815,7 @@
                                                     {% endif %}
                                                 </div>
                                             </td>
-                                            <td class="py-3 px-4 mobile-hidden">
+                                            <td class="py-3 px-4">
                                                 <div class="flex flex-wrap gap-1">
                                                     {% if entry.actual_bonuses %}
                                                         {% for num in entry.actual_bonuses %}
@@ -980,3 +949,5 @@
     </script>
 </body>
 </html>
+
+

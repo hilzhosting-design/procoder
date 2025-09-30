@@ -215,11 +215,11 @@
                         <table class="w-full text-sm text-left">
                             <thead class="bg-gray-800 text-gray-400 border-b border-gray-700">
                                 <tr>
-                                    <th class="p-3">UID</th>
-                                    <th class="p-3">Email</th>
+                                    <th class="p-3">UID</th> {# Changed from Username to UID #}
+                                    <th class="p-3">Email</th> {# Changed from Username to Email #}
                                     <th class="p-3">Subscribed</th>
                                     <th class="p-3">Telegram Chat ID</th>
-                                    <th class="p-3">Admin</th>
+                                    <th class="p-3">Admin</th> {# Added Admin column #}
                                     <th class="p-3">Created</th>
                                     <th class="p-3">Actions</th>
                                 </tr>
@@ -227,8 +227,8 @@
                             <tbody>
                                 {% for user in users %}
                                 <tr class="border-t border-gray-800 hover:bg-gray-800 transition">
-                                    <td class="p-3 text-gray-300 font-mono">{{ user.uid }}</td>
-                                    <td class="p-3 text-indigo-400 font-medium">{{ user.email }}</td>
+                                    <td class="p-3 text-gray-300 font-mono">{{ user.uid }}</td> {# Display UID #}
+                                    <td class="p-3 text-indigo-400 font-medium">{{ user.email }}</td> {# Display Email #}
                                     <td class="p-3">
                                         <span class="px-2 py-1 text-xs font-medium rounded-full
                                             {% if user.is_subscribed %} bg-green-600 text-white
@@ -247,14 +247,14 @@
                                         </span>
                                     </td>
                                     <td class="p-3 text-gray-300">
-                                        {% if user.created_at %}
+                                        {% if user.created_at %} {# Check if created_at is not None #}
                                             {{ user.created_at.strftime('%Y-%m-%d %H:%M') }}
                                         {% else %}
                                             N/A
                                         {% endif %}
                                     </td>
                                     <td class="p-3 flex flex-col space-y-2 sm:flex-row sm:space-x-2 sm:space-y-0">
-                                        <a href="{{ url_for('admin_view_as', uid=user.uid) }}" class="btn btn-info text-xs py-1 px-3">View as User</a>
+                                        {# Toggle Subscription Form #}
                                         <form method="POST" action="{{ url_for('admin_toggle_subscription', uid=user.uid) }}">
                                             <button type="submit" class="btn {% if user.is_subscribed %}btn-danger{% else %}btn-success{% endif %} text-xs py-1 px-3">
                                                 {% if user.is_subscribed %}
@@ -264,6 +264,7 @@
                                                 {% endif %}
                                             </button>
                                         </form>
+                                        {# Grant/Revoke Admin Form #}
                                         <form method="POST" action="{{ url_for('set_admin_claim') }}">
                                             <input type="hidden" name="email" value="{{ user.email }}">
                                             <button type="submit" name="action" value="{% if user.is_admin %}revoke{% else %}grant{% endif %}"
@@ -275,6 +276,7 @@
                                                 {% endif %}
                                             </button>
                                         </form>
+                                        {# Delete User Form (using a custom modal for confirmation instead of alert) #}
                                         <button type="button" class="btn btn-danger text-xs py-1 px-3"
                                                 onclick="showDeleteConfirmation('{{ user.uid }}', '{{ user.email }}');">
                                             Delete
