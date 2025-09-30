@@ -1,0 +1,14 @@
+Flask[async]
+requests
+beautifulsoup4
+pytz
+firebase-admin
+Werkzeug
+gunicorn
+APScheduler
+python-dotenv
+scikit-learn
+pandas
+numpy
+google-cloud-firestore
+
