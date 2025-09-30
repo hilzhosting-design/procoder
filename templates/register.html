@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Register - HBet 5/50</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%231a1a1a'/><text x='50%' y='50%' dominant-baseline='middle' text-anchor='middle' font-family='Inter, sans-serif' font-size='12' fill='white'>H</text></svg>" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    <!-- Firebase SDKs - Updated to 9.6.1 for consistency -->
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0d0d0d; /* Consistent deep black background */
+            color: #e0e0e0; /* Soft white text */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 3rem; /* Increased padding to give more space around content */
+        }
+        /* Card/Section Background */
+        .main-card {
+            background-color: #1a1a1a; /* Darker card background */
+            border-radius: 0.75rem; /* rounded-xl */
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.6); /* More pronounced shadow */
+            padding: 2.5rem; /* Increased padding for more space */
+            width: 100%; /* Ensure it takes full width of its container */
+            max-width: 24rem; /* Reduced max-width for a more compact look */
+        }
+
+        /* Flash messages - consistent with login.html */
+        .flash-message {
+            padding: 1.25rem; /* Larger padding */
+            margin-bottom: 1.5rem; /* More space below */
+            border-radius: 0.75rem; /* More rounded */
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: 600;
+            color: #fff;
+            box-shadow: 0 0 15px rgba(0,0,0,0.6); /* Deeper shadow */
+            border: 1px solid; /* Add border for definition */
+        }
+        .flash-message.success {
+            background-color: #16a34a; /* Darker green */
+            border-color: #22c55e;
+            box-shadow: 0 0 12px #16a34a;
+        }
+        .flash-message.error {
+            background-color: #b91c1c; /* Darker red */
+            border-color: #ef4444;
+            box-shadow: 0 0 12px #b91c1c;
+        }
+        .flash-message.warning {
+            background-color: #d97706; /* Darker orange */
+            border-color: #fbbf24;
+            box-shadow: 0 0 12px #d97706;
+        }
+        .flash-message.info {
+            background-color: #2563eb; /* Darker blue */
+            border-color: #3b82f6;
+            box-shadow: 0 0 12px #2563eb;
+        }
+        .flash-message .close-button {
+            background: none;
+            border: none;
+            color: inherit;
+            font-size: 1.8rem; /* Larger close button */
+            cursor: pointer;
+            margin-left: 1.5rem;
+            line-height: 1;
+            opacity: 0.8;
+            transition: opacity 0.2s;
+        }
+        .flash-message .close-button:hover {
+            opacity: 1;
+        }
+
+        /* Input field specific styling for dark theme - consistent with login.html */
+        .form-input-custom { /* Custom class to avoid conflicts with Tailwind's default input styling */
+            background-color: #2a2a2a; /* Darker input background */
+            border: 1px solid #444; /* Darker border */
+            color: #e0e0e0; /* Light text color */
+            padding: 0.75rem 1rem; /* Adjust padding */
+            border-radius: 0.5rem; /* Slightly less rounded */
+            transition: border-color 0.2s, box-shadow 0.2s;
+            width: 100%; /* Ensure it takes full width */
+        }
+        .form-input-custom:focus {
+            border-color: #63b3ed; /* Light blue border on focus */
+            box-shadow: 0 0 0 3px rgba(99, 179, 237, 0.3); /* Blue glow on focus */
+            background-color: #333; /* Slightly lighter on focus */
+            outline: none; /* Remove default outline */
+        }
+        /* Consistent button styling - consistent with login.html */
+        .btn-primary {
+            background-color: #4f46e5; /* Indigo-600 */
+            color: white;
+            font-weight: bold;
+            padding: 0.75rem 1.5rem; /* py-3 px-4 */
+            border-radius: 0.5rem; /* rounded-lg */
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); /* shadow-md */
+            transition: all 0.2s ease-in-out;
+            transform: scale(1);
+            width: 100%;
+        }
+        .btn-primary:hover {
+            background-color: #4338ca; /* Indigo-700 */
+            transform: scale(1.02);
+            box-shadow: 0 6px 10px rgba(0, 0, 0, 0.2);
+        }
+        .btn-primary:focus {
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.5); /* ring-2 ring-indigo-500 ring-opacity-75 */
+        }
+        .btn-primary:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        /* Custom Message Box Styles - consistent with login.html */
+        #messageBox {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: #333;
+            color: white;
+            padding: 15px 25px;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+            z-index: 1000;
+            display: none; /* Hidden by default */
+            font-weight: 600;
+            min-width: 250px;
+            text-align: center;
+        }
+        #messageBox.success { background-color: #16a34a; }
+        #messageBox.error { background-color: #b91c1c; }
+        #messageBox.warning { background-color: #d97706; }
+        #messageBox.info { background-color: #2563eb; }
+    </style>
+</head>
+<body class="bg-black">
+    <div class="main-card w-full max-w-md">
+        <h1 class="text-3xl font-bold text-white text-center mb-6">Register</h1>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div class="w-full mb-6">
+                    {% for category, message in messages %}
+                        <div class="flash-message {{ category }}">
+                            <span>{{ message }}</span>
+                            <button class="close-button" aria-label="Close">&times;</button>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+
+        <form id="registerForm" class="space-y-4">
+            <div>
+                <label for="email" class="block text-gray-300 text-sm font-bold mb-2">Email:</label>
+                <input type="email" id="email" name="email" required
+                       class="form-input-custom" placeholder="your@email.com" autocomplete="email" />
+            </div>
+            <div>
+                <label for="password" class="block text-gray-300 text-sm font-bold mb-2">Password:</label>
+                <input type="password" id="password" name="password" required
+                       class="form-input-custom" placeholder="********" autocomplete="new-password" />
+            </div>
+            <button type="submit" class="btn-primary" id="registerButton">
+                Register
+            </button>
+        </form>
+        <p class="text-center text-gray-400 text-sm mt-4">Already have an account? <a href="{{ url_for('login') }}" class="text-indigo-400 hover:underline">Login here</a></p>
+    </div>
+
+    <div id="messageBox" class="hidden"></div>
+
+    <script>
+        // Custom message box function
+        function showMessage(message, type = 'info', duration = 3000) {
+            const messageBox = document.getElementById('messageBox');
+            messageBox.textContent = message;
+            messageBox.className = ''; // Clear existing classes
+            messageBox.classList.add(type);
+            messageBox.style.display = 'block';
+
+            setTimeout(() => {
+                messageBox.style.display = 'none';
+            }, duration);
+        }
+
+        // Initialize Firebase with client-side configuration passed from Flask
+        const firebaseClientConfigString = `{{ firebase_web_client_config_json | safe }}`;
+
+        let firebaseClientConfig;
+        try {
+            firebaseClientConfig = firebaseClientConfigString ? JSON.parse(firebaseClientConfigString) : {};
+            
+            if (Object.keys(firebaseClientConfig).length > 0 && firebaseClientConfig.apiKey && firebaseClientConfig.apiKey !== "YOUR_WEB_API_KEY") {
+                if (!firebase.apps.length) {
+                    firebase.initializeApp(firebaseClientConfig);
+                }
+            } else {
+                console.error("Firebase client configuration is empty or default placeholder. Firebase will not be initialized.");
+                document.getElementById('registerForm').innerHTML = '<p class="text-red-500 text-center font-semibold">Authentication service not available. Please ensure Firebase client configuration is set correctly in your environment.</p>';
+                showMessage("Error: Firebase configuration missing. Please contact support.", 'error');
+            }
+        } catch (e) {
+            console.error("JSON parsing error for firebaseClientConfig:", e);
+            console.error("String that caused the error:", firebaseClientConfigString);
+            document.getElementById('registerForm').innerHTML = '<p class="text-red-500 text-center font-semibold">Error loading authentication configuration. Please check console for details.</p>';
+            showMessage("Error loading authentication. Please contact support.", 'error');
+        }
+
+        const auth = firebase.auth();
+        const db = firebase.firestore(); // Initialize firestore as well
+
+        document.getElementById('registerForm').addEventListener('submit', async (e) => {
+            e.preventDefault(); // Prevent default form submission immediately
+            const emailInput = document.getElementById('email');
+            const passwordInput = document.getElementById('password');
+            const registerButton = document.getElementById('registerButton');
+
+            const email = emailInput.value;
+            const password = passwordInput.value;
+
+            // Basic client-side validation
+            if (!email || !password) {
+                showMessage("Please fill in both email and password.", "warning");
+                return;
+            }
+            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+                showMessage("Please enter a valid email address.", "warning");
+                return;
+            }
+            if (password.length < 6) {
+                showMessage("Password must be at least 6 characters long.", "warning");
+                return;
+            }
+
+            // Disable button and show loading state
+            registerButton.disabled = true;
+            registerButton.textContent = 'Registering...';
+
+            try {
+                // Use Firebase client-side registration
+                const userCredential = await auth.createUserWithEmailAndPassword(email, password);
+                const idToken = await userCredential.user.getIdToken();
+
+                // Send ID token AND email to Flask backend for session management and Firestore storage
+                const response = await fetch('/register', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ idToken: idToken, email: email }), // Corrected: sending both idToken and email
+                });
+
+                // Check if the response is OK (status 200-299) before trying to parse JSON
+                if (!response.ok) {
+                    const errorText = await response.text(); // Get raw text for debugging 404/other errors
+                    console.error(`Backend /register responded with status ${response.status}: ${errorText}`);
+                    showMessage(`Registration failed: Server error (${response.status}). Please try again.`, 'error');
+                    return; // Stop execution here
+                }
+
+                const data = await response.json();
+                
+                // Modified: Check for 'success' key and use 'data.redirect'
+                if (data.success) {
+                    showMessage("Registration successful! Redirecting...", 'success');
+                    window.location.href = data.redirect;
+                } else {
+                    // This block will now correctly handle explicit backend errors.
+                    showMessage(data.message || "An unknown error occurred during registration.", 'error');
+                    console.error("Backend verification failed after registration:", data.message);
+                }
+            } catch (error) {
+                let errorMessage = "An unknown error occurred.";
+                // Firebase Auth errors from client-side
+                if (error.code) {
+                    switch (error.code) {
+                        case 'auth/email-already-in-use':
+                            errorMessage = 'Email already registered. Please login or use a different email.';
+                            break;
+                        case 'auth/invalid-email':
+                            errorMessage = 'Invalid email address format.';
+                            break;
+                        case 'auth/weak-password':
+                            errorMessage = 'Password is too weak. Please choose a stronger password (min 6 characters).';
+                            break;
+                        default:
+                            errorMessage = `Registration failed: ${error.message}`;
+                    }
+                } else if (error instanceof TypeError) {
+                    // This typically catches network errors (e.g., server unreachable, CORS issues)
+                    errorMessage = "Network error: Could not connect to the server. Please check your internet connection.";
+                } else {
+                    // Catch any other unexpected errors
+                    errorMessage = `An unexpected error occurred: ${error.message}`;
+                }
+                showMessage(errorMessage, 'error');
+                console.error("Firebase Registration Error (client-side or fetch):", error);
+            } finally {
+                // Re-enable button and reset text after attempt
+                registerButton.disabled = false;
+                registerButton.textContent = 'Register';
+            }
+        });
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const closeButtons = document.querySelectorAll('.flash-message .close-button');
+            closeButtons.forEach((btn) =>
+                btn.addEventListener('click', () => {
+                    btn.closest('.flash-message').remove();
+                })
+            );
+        });
+    </script>
+</body>
+</html>

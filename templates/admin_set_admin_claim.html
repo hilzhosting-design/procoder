@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Set Admin Claim</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0d1117;
+            color: #e2e8f0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 1rem;
+        }
+        .container {
+            max-width: 600px;
+            width: 100%;
+            background-color: #1a202c;
+            padding: 2.5rem;
+            border-radius: 1.5rem;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            margin-top: 2rem;
+        }
+        .flash-message {
+            padding: 1rem;
+            margin-bottom: 1.5rem;
+            border-radius: 0.75rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: 600;
+            color: #fff;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+            border: 1px solid;
+        }
+        .flash-message.success { background-color: #059669; border-color: #047857;}
+        .flash-message.error { background-color: #dc2626; border-color: #b91c1c;}
+        .flash-message.info { background-color: #2563eb; border-color: #1d4ed8;}
+        .flash-message.warning { background-color: #d97706; border-color: #b45309;}
+        .flash-message .close-button {
+            background: none;
+            border: none;
+            color: inherit;
+            font-size: 1.75rem;
+            cursor: pointer;
+            margin-left: 1rem;
+            line-height: 1;
+            opacity: 0.7;
+            transition: opacity 0.2s;
+        }
+        .flash-message .close-button:hover {
+            opacity: 1;
+        }
+        input[type="email"] {
+            background-color: #1f2937;
+            border: 2px solid #4a5568;
+            color: #e2e8f0;
+            padding: 0.875rem 1rem;
+            border-radius: 0.75rem;
+            transition: all 0.3s ease;
+            font-family: inherit;
+        }
+        input[type="email"]:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+            background-color: #2d3748;
+        }
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.75rem;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            border: none;
+            position: relative;
+            overflow: hidden;
+            z-index: 1;
+        }
+        .btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.1);
+            transition: all 0.3s ease;
+            z-index: -1;
+        }
+        .btn:hover::before {
+            left: 0;
+        }
+        .btn-primary {
+            background-color: #4f46e5;
+            color: white;
+            box-shadow: 0 4px 10px rgba(79, 70, 229, 0.3);
+        }
+        .btn-primary:hover {
+            background-color: #4338ca;
+            box-shadow: 0 6px 15px rgba(79, 70, 229, 0.4);
+        }
+        .btn-danger {
+            background-color: #dc2626;
+            color: white;
+            box-shadow: 0 4px 10px rgba(220, 38, 38, 0.3);
+        }
+        .btn-danger:hover {
+            background-color: #b91c1c;
+            box-shadow: 0 6px 15px rgba(220, 38, 38, 0.4);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="text-3xl font-bold text-white mb-6 text-center">Set Admin Claim</h1>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div class="w-full mb-6">
+                    {% for category, message in messages %}
+                        <div class="flash-message {{ category }}">
+                            <span>{{ message }}</span>
+                            <button class="close-button" aria-label="Close">&times;</button>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+
+        <form method="POST" action="{{ url_for('set_admin_claim') }}" class="space-y-6">
+            <div>
+                <label for="email" class="block text-gray-300 text-sm font-bold mb-2">
+                    User Email:
+                </label>
+                <input type="email" id="email" name="email" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" placeholder="Enter user email" required>
+            </div>
+            <div class="flex justify-center space-x-4">
+                <button type="submit" name="action" value="grant" class="btn btn-primary">Grant Admin</button>
+                <button type="submit" name="action" value="revoke" class="btn btn-danger">Revoke Admin</button>
+            </div>
+        </form>
+        <div class="mt-8 text-center">
+            <a href="{{ url_for('index') }}" class="text-indigo-400 hover:text-indigo-300 transition duration-200">Back Home</a>
+        </div>
+    </div>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const closeButtons = document.querySelectorAll('.flash-message .close-button');
+            closeButtons.forEach((btn) =>
+                btn.addEventListener('click', () => {
+                    btn.closest('.flash-message').remove();
+                })
+            );
+        });
+    </script>
+</body>
+</html>

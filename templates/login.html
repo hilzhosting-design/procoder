@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - HBet 5/50</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%231a1a1a'/><text x='50%' y='50%' dominant-baseline='middle' text-anchor='middle' font-family='Inter, sans-serif' font-size='12' fill='white'>H</text></svg>" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    <!-- Firebase SDKs - Updated to 9.6.1 for consistency -->
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0d0d0d; /* Consistent deep black background */
+            color: #e0e0e0; /* Soft white text */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 3rem; /* Increased padding to give more space around content */
+        }
+        /* Card/Section Background */
+        .main-card {
+            background-color: #1a1a1a; /* Darker card background */
+            border-radius: 0.75rem; /* rounded-xl */
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.6); /* More pronounced shadow */
+            padding: 2.5rem; /* Increased padding for more space */
+            width: 100%; /* Ensure it takes full width of its container */
+            max-width: 24rem; /* Reduced max-width for a more compact look */
+        }
+
+        /* Flash messages - consistent with index.html */
+        .flash-message {
+            padding: 1.25rem; /* Larger padding */
+            margin-bottom: 1.5rem; /* More space below */
+            border-radius: 0.75rem; /* More rounded */
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: 600;
+            color: #fff;
+            box-shadow: 0 0 15px rgba(0,0,0,0.6); /* Deeper shadow */
+            border: 1px solid; /* Add border for definition */
+        }
+        .flash-message.success {
+            background-color: #16a34a; /* Darker green */
+            border-color: #22c55e;
+            box-shadow: 0 0 12px #16a34a;
+        }
+        .flash-message.error {
+            background-color: #b91c1c; /* Darker red */
+            border-color: #ef4444;
+            box-shadow: 0 0 12px #b91c1c;
+        }
+        .flash-message.warning {
+            background-color: #d97706; /* Darker orange */
+            border-color: #fbbf24;
+            box-shadow: 0 0 12px #d97706;
+        }
+        .flash-message.info {
+            background-color: #2563eb; /* Darker blue */
+            border-color: #3b82f6;
+            box-shadow: 0 0 12px #2563eb;
+        }
+        .flash-message .close-button {
+            background: none;
+            border: none;
+            color: inherit;
+            font-size: 1.8rem; /* Larger close button */
+            cursor: pointer;
+            margin-left: 1.5rem;
+            line-height: 1;
+            opacity: 0.8;
+            transition: opacity 0.2s;
+        }
+        .flash-message .close-button:hover {
+            opacity: 1;
+        }
+
+        /* Input field specific styling for dark theme */
+        .form-input-custom { /* Custom class to avoid conflicts with Tailwind's default input styling */
+            background-color: #2a2a2a; /* Darker input background */
+            border: 1px solid #444; /* Darker border */
+            color: #e0e0e0; /* Light text color */
+            padding: 0.75rem 1rem; /* Adjust padding */
+            border-radius: 0.5rem; /* Slightly less rounded */
+            transition: border-color 0.2s, box-shadow 0.2s;
+            width: 100%; /* Ensure it takes full width */
+        }
+        .form-input-custom:focus {
+            border-color: #63b3ed; /* Light blue border on focus */
+            box-shadow: 0 0 0 3px rgba(99, 179, 237, 0.3); /* Blue glow on focus */
+            background-color: #333; /* Slightly lighter on focus */
+            outline: none; /* Remove default outline */
+        }
+        /* Consistent button styling */
+        .btn-primary {
+            background-color: #4f46e5; /* Indigo-600 */
+            color: white;
+            font-weight: bold;
+            padding: 0.75rem 1.5rem; /* py-3 px-4 */
+            border-radius: 0.5rem; /* rounded-lg */
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); /* shadow-md */
+            transition: all 0.2s ease-in-out;
+            transform: scale(1);
+            width: 100%;
+        }
+        .btn-primary:hover {
+            background-color: #4338ca; /* Indigo-700 */
+            transform: scale(1.02);
+            box-shadow: 0 6px 10px rgba(0, 0, 0, 0.2);
+        }
+        .btn-primary:focus {
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.5); /* ring-2 ring-indigo-500 ring-opacity-75 */
+        }
+        .btn-primary:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        /* Custom Message Box Styles */
+        #messageBox {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: #333;
+            color: white;
+            padding: 15px 25px;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+            z-index: 1000;
+            display: none; /* Hidden by default */
+            font-weight: 600;
+            min-width: 250px;
+            text-align: center;
+        }
+        #messageBox.success { background-color: #16a34a; }
+        #messageBox.error { background-color: #b91c1c; }
+        #messageBox.warning { background-color: #d97706; }
+        #messageBox.info { background-color: #2563eb; }
+    </style>
+</head>
+<body class="bg-black">
+    <div class="main-card w-full max-w-md">
+        <h1 class="text-3xl font-bold text-white text-center mb-6">Login</h1>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div class="w-full mb-6">
+                    {% for category, message in messages %}
+                        <div class="flash-message {{ category }}">
+                            <span>{{ message }}</span>
+                            <button class="close-button" aria-label="Close">&times;</button>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+
+        <form id="loginForm" class="space-y-4">
+            <div>
+                <label for="email" class="block text-gray-300 text-sm font-bold mb-2">Email:</label>
+                <input type="email" id="email" name="email" required
+                       class="form-input-custom" placeholder="your@email.com" autocomplete="email" />
+            </div>
+            <div>
+                <label for="password" class="block text-gray-300 text-sm font-bold mb-2">Password:</label>
+                <input type="password" id="password" name="password" required
+                       class="form-input-custom" placeholder="********" autocomplete="current-password" />
+            </div>
+            <button type="submit" class="btn-primary">
+                Login
+            </button>
+        </form>
+        <p class="text-center text-gray-400 text-sm mt-4">Don't have an account? <a href="{{ url_for('register') }}" class="text-indigo-400 hover:underline">Register here</a></p>
+    </div>
+
+    <div id="messageBox" class="hidden"></div>
+
+    <script>
+        // Custom message box function
+        function showMessage(message, type = 'info', duration = 3000) {
+            console.log(`[showMessage] Displaying message: ${message} (Type: ${type})`);
+            const messageBox = document.getElementById('messageBox');
+            messageBox.textContent = message;
+            messageBox.className = ''; // Clear existing classes
+            messageBox.classList.add(type);
+            messageBox.style.display = 'block';
+
+            setTimeout(() => {
+                messageBox.style.display = 'none';
+                console.log("[showMessage] Message box hidden.");
+            }, duration);
+        }
+
+        // Initialize Firebase with client-side configuration passed from Flask
+        const firebaseClientConfigString = `{{ firebase_web_client_config_json | safe }}`;
+        //console.log("Client-side: Raw firebaseClientConfigString (from Flask):", firebaseClientConfigString);
+
+        let firebaseClientConfig;
+        try {
+            firebaseClientConfig = firebaseClientConfigString ? JSON.parse(firebaseClientConfigString) : {};
+           // console.log("Client-side: Parsed firebaseClientConfig:", firebaseClientConfig);
+            
+            if (Object.keys(firebaseClientConfig).length > 0 && firebaseClientConfig.apiKey && firebaseClientConfig.apiKey !== "YOUR_WEB_API_KEY") {
+                if (!firebase.apps.length) {
+                    firebase.initializeApp(firebaseClientConfig);
+                  //  console.log("Client-side: Firebase app initialized successfully.");
+                } else {
+                    console.log("Client-side: Firebase app already initialized.");
+                }
+            } else {
+              //  console.error("Client-side: Firebase client configuration is empty or default placeholder. Firebase will not be initialized.");
+                document.getElementById('loginForm').innerHTML = '<p class="text-red-500 text-center font-semibold">Authentication service not available. Please ensure Firebase client configuration is set correctly in your environment.</p>';
+                showMessage("Error: Firebase configuration missing. Please contact support.", 'error');
+            }
+        } catch (e) {
+           // console.error("Client-side: JSON parsing error for firebaseClientConfig:", e);
+           // console.error("Client-side: String that caused the error:", firebaseClientConfigString);
+            document.getElementById('loginForm').innerHTML = '<p class="text-red-500 text-center font-semibold">Error loading authentication configuration. Please check console for details.</p>';
+            showMessage("Error loading authentication. Please contact support.", 'error');
+        }
+
+        const auth = firebase.auth();
+        const db = firebase.firestore(); // Initialize firestore as well
+        //console.log("Client-side: Firebase Auth and Firestore instances obtained.");
+
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault(); // Prevent default form submission immediately
+           // console.log("Client-side: Login form submitted.");
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+           // console.log(`Client-side: Attempting login for email: ${email}`);
+
+            try {
+                //console.log("Client-side: Calling signInWithEmailAndPassword...");
+                const userCredential = await auth.signInWithEmailAndPassword(email, password);
+                const user = userCredential.user;
+              //  console.log("Client-side: User signed in successfully with Firebase Auth:", user);
+
+               // console.log("Client-side: Getting ID Token...");
+                const idToken = await user.getIdToken();
+              //  console.log("Client-side: ID Token obtained (first 20 chars):", idToken.substring(0, 20) + "...");
+
+              //  console.log("Client-side: Sending ID token and email to backend /login endpoint...");
+                const response = await fetch('/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ idToken: idToken, email: email }), // Corrected: sending both idToken and email
+                });
+
+              //  console.log(`Client-side: Backend /login response status: ${response.status}`);
+                // Check if the response is OK (status 200-299) before trying to parse JSON
+                if (!response.ok) {
+                    const errorText = await response.text(); // Get raw text for debugging 404/other errors
+                  //  console.error(`Client-side: Backend /login responded with status ${response.status}: ${errorText}`);
+                    showMessage(`Login failed: Server error (${response.status}). Please try again.`, 'error');
+                    return;
+                }
+
+                const data = await response.json();
+              //  console.log("Client-side: Response data from backend /login:", data);
+
+                if (data.success) { // Check for 'success' key as per Flask response
+                    // MODIFIED: Use the message from the backend for the greeting
+                    showMessage(data.message, 'success');
+                   // console.log("Client-side: Login successful, redirecting to:", data.redirect);
+                    window.location.href = data.redirect;
+                } else {
+                    showMessage(data.message, 'error');
+                   // console.error("Client-side: Backend verification failed:", data.message);
+                }
+            } catch (error) {
+                let errorMessage = "An unknown error occurred.";
+               // console.error("Client-side: Login process encountered an error:", error);
+                // Firebase Auth errors from client-side
+                if (error.code) {
+                    switch (error.code) {
+                        case 'auth/invalid-email':
+                            errorMessage = 'Invalid email address format.';
+                            break;
+                        case 'auth/user-disabled':
+                            errorMessage = 'Your account has been disabled.';
+                            break;
+                        case 'auth/user-not-found':
+                            errorMessage = 'No user found with this email.';
+                            break;
+                        case 'auth/wrong-password':
+                            errorMessage = 'Incorrect password.';
+                            break;
+                        case 'auth/invalid-login-credentials': // Specific error for wrong email/password
+                            errorMessage = 'Invalid email or password.';
+                            break;
+                        case 'auth/too-many-requests':
+                            errorMessage = 'Too many failed login attempts. Please try again later.';
+                            break;
+                        default:
+                            errorMessage = `Login failed: ${error.message}`;
+                    }
+                } else {
+                    // Network errors or JSON parsing errors from fetch
+                    errorMessage = `Network or data error: ${error.message}`;
+                }
+                showMessage(errorMessage, 'error');
+               // console.error("Client-side: Final error message to user:", errorMessage);
+            }
+        });
+
+        document.addEventListener('DOMContentLoaded', () => {
+           // console.log("Client-side: DOMContentLoaded event fired. Setting up close buttons for flash messages.");
+            const closeButtons = document.querySelectorAll('.flash-message .close-button');
+            closeButtons.forEach((btn) =>
+                btn.addEventListener('click', () => {
+                   // console.log("Client-side: Closing flash message.");
+                    btn.closest('.flash-message').remove();
+                })
+            );
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Telegram Settings - HBet 5/50</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%231a1a1a'/><text x='50%' y='50%' dominant-baseline='middle' text-anchor='middle' font-family='Inter, sans-serif' font-size='12' fill='white'>H</text></svg>" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
+        body { font-family: 'Inter', sans-serif; background-color: #000; color: #f3f4f6; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+        .flash-message { padding: 1rem; margin-bottom: 1rem; border-radius: 0.5rem; display: flex; justify-content: space-between; align-items: center; font-weight: 600; color: #fff; }
+        .flash-message.success { background-color: #10b981; box-shadow: 0 0 10px #10b981; }
+        .flash-message.error { background-color: #dc2626; box-shadow: 0 0 10px #dc2626; }
+        .flash-message.info { background-color: #2563eb; box-shadow: 0 0 10px #2563eb; }
+        .flash-message .close-button { background: none; border: none; color: inherit; font-size: 1.5rem; cursor: pointer; margin-left: 1rem; line-height: 1; }
+    </style>
+</head>
+<body class="bg-black">
+    <div class="bg-[#111] p-8 rounded-xl shadow-lg w-full max-w-md">
+        <h1 class="text-3xl font-bold text-white text-center mb-6">Telegram Settings</h1>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div class="w-full mb-6">
+                    {% for category, message in messages %}
+                        <div class="flash-message {{ category }}">
+                            <span>{{ message }}</span>
+                            <button class="close-button" aria-label="Close">&times;</button>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+
+        <p class="text-gray-300 mb-4">
+            To receive alerts, search for userinfobot and send a message to your @userinfobot and then enter your Chat ID below. You can find your Chat ID by sending a message to <a href="https://t.me/userinfobot" target="_blank" class="text-indigo-400 hover:underline">@userinfobot</a> on Telegram.
+        </p>
+
+        <form method="POST" class="space-y-4">
+            <div>
+                <label for="telegram_chat_id" class="block text-gray-300 text-sm font-bold mb-2">Your Telegram Chat ID:</label>
+                <input type="text" id="telegram_chat_id" name="telegram_chat_id" value="{{ current_chat_id }}"
+                       class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline bg-gray-800 border-gray-700 text-white" />
+            </div>
+            <button type="submit"
+                    class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-200 ease-in-out transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-75 w-full">
+                Save Settings
+            </button>
+        </form>
+        <a href="{{ url_for('index') }}" class="mt-6 inline-block text-indigo-400 hover:underline">Back to Home</a>
+    </div>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const closeButtons = document.querySelectorAll('.flash-message .close-button');
+            closeButtons.forEach((btn) =>
+                btn.addEventListener('click', () => {
+                    btn.closest('.flash-message').remove();
+                })
+            );
+        });
+    </script>
+</body>
+</html>
