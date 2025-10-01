@@ -443,11 +443,11 @@ def backtest_strategy(draws_data):
     logging.debug(f"backtest_strategy received {len(draws_data)} draws for processing.")
     results = []
     # Need at least 27 draws for a valid backtest window.
-    if len(draws_data) < 27:
+    if len(draws_data) < 50:
         logging.info(f"Not enough draws for a valid backtest (need at least 27). Got {len(draws_data)}. Skipping.")
         return [], [], []
 
-    for i in range(len(draws_data) - 50):
+    for i in range(len(draws_data) - 150):
         target_actual_draw = draws_data[i]
         base_draw_for_prediction = draws_data[i + 1]
         historical_data_for_prediction = draws_data[i + 2:]
