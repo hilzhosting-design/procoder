@@ -297,7 +297,7 @@ def get_latest_actual_draw():
         return draws[0]
     return None, None, None, None, None
 
-# --- DYNAMIC ADAPTIVE SCORING v8 ---
+# --- COMBINATORIAL ANALYSIS STRATEGY v9 ---
 
 def super_hybrid_pool(bonus):
     """Generates a pool of candidate numbers based on the super hybrid strategy."""
@@ -326,9 +326,8 @@ def get_recency_weighted_frequencies(historical_draws):
     frequencies = defaultdict(float)
     total_draws = len(historical_draws)
     for i, draw in enumerate(historical_draws):
-        # Weight decays from 1.0 for the most recent draw down to a small fraction for the oldest.
         weight = (total_draws - i) / total_draws
-        for num in draw[1]: # Main numbers
+        for num in draw[1]:
             frequencies[num] += weight
     return frequencies
 
@@ -337,7 +336,6 @@ def get_pairing_frequencies(guaranteed_pool, historical_draws):
     pair_counts = defaultdict(int)
     for _, mains, _, _, _ in historical_draws:
         mains_set = set(mains)
-        # If any of the guaranteed numbers are in this draw, count their partners.
         if not set(guaranteed_pool).isdisjoint(mains_set):
             for num in mains_set:
                 if num not in guaranteed_pool:
@@ -351,69 +349,97 @@ def get_following_numbers_pool(base_mains, historical_draws):
     """
     following_numbers = []
     base_mains_set = set(base_mains)
-    # Iterate backwards through history to find the draw that follows a match
     for i in range(len(historical_draws) - 1):
         current_mains = set(historical_draws[i][1])
         previous_mains = set(historical_draws[i+1][1])
-        # If the previous draw has any of our base numbers...
         if not base_mains_set.isdisjoint(previous_mains):
-            # ...then the numbers in the current draw are "following numbers".
             following_numbers.extend(list(current_mains))
-    
-    # Return the most common following numbers
     return [num for num, count in Counter(following_numbers).most_common(10)]
 
+def get_trio_frequencies(historical_draws):
+    """Counts the occurrences of all 3-number combinations in historical draws."""
+    trio_counts = Counter()
+    for _, mains, _, _, _ in historical_draws:
+        for trio in itertools.combinations(sorted(mains), 3):
+            trio_counts[trio] += 1
+    return trio_counts
 
 def predict_strategy(base_mains, bonus1, bonus2, historical_draws, target_size=4):
     """
-    Generates a 4-number prediction using an enhanced strategy.
-    Focuses on recency, pairings, and cross-boosting to improve chances of 3+ hits.
+    Generates a 4-number prediction using combinatorial analysis (v9)
+    to maximize the chance of hitting 4 numbers.
     """
-    scores = defaultdict(int)
+    # === Phase 1: Individual Number Scoring ===
+    scores = defaultdict(float)
 
-    # 1. Guaranteed pool: take top 2 follow-on numbers as anchors
-    guaranteed_pool = get_following_numbers_pool(base_mains, historical_draws)[:2]
-    for num in guaranteed_pool:
-        scores[num] += 1500  # strong anchor weight
+    # 1. Following Numbers Pool (Reduced influence, not a guarantee)
+    following_pool = get_following_numbers_pool(base_mains, historical_draws)[:5]
+    for num in following_pool:
+        scores[num] += 250
 
-    # 2. Pairing frequencies (boosted weight)
-    pair_freqs = get_pairing_frequencies(guaranteed_pool, historical_draws)
+    # 2. Pairing Frequencies (Based on the broader following_pool)
+    pair_freqs = get_pairing_frequencies(following_pool, historical_draws)
     for num, freq in pair_freqs.items():
-        scores[num] += freq * 70
+        scores[num] += freq * 75
 
-    # 3. Hybrid pool (bonus-based)
+    # 3. Hybrid, Hot, Cold Pools
     hybrid_pool = set(super_hybrid_pool(bonus1) + super_hybrid_pool(bonus2))
-
-    # 4. Hot & cold numbers
     hot_numbers = set(get_hot_numbers(historical_draws, window=15))
     cold_numbers = set(get_cold_numbers(historical_draws, window=25))
 
-    # Cross-boost: numbers appearing in multiple pools get extra weight
-    for num in hybrid_pool | hot_numbers | cold_numbers:
+    for num in range(1, 51):
         boost = 0
-        if num in hybrid_pool: boost += 80
-        if num in hot_numbers: boost += 70
-        if num in cold_numbers: boost += 50
-        if sum([num in hybrid_pool, num in hot_numbers, num in cold_numbers]) >= 2:
-            boost += 100  # overlap bonus
+        in_hybrid = num in hybrid_pool
+        in_hot = num in hot_numbers
+        in_cold = num in cold_numbers
+        
+        if in_hybrid: boost += 85
+        if in_hot: boost += 75
+        if in_cold: boost += 55
+        
+        # Increased overlap bonus for versatile numbers
+        if sum([in_hybrid, in_hot, in_cold]) >= 2:
+            boost += 150
         scores[num] += boost
 
-    # 5. Recency-weighted frequencies (heavier influence)
+    # 4. Recency-weighted frequencies
     recency_freqs = get_recency_weighted_frequencies(historical_draws)
     for num, freq in recency_freqs.items():
-        scores[num] += int(freq * 12)
+        scores[num] += freq * 15
 
-    # --- Final Selection ---
-    # --- Final Selection ---
-    final_prediction = list(set(guaranteed_pool))  # anchors first
-    sorted_candidates = sorted(scores, key=lambda n: scores[n], reverse=True)
+    # === Phase 2: Combinatorial Analysis ===
 
-    for num in sorted_candidates:
-        if len(final_prediction) < target_size and num not in final_prediction:
-            final_prediction.append(num)
+    # 1. Get historical trio data. We only care about trios that have appeared more than once.
+    trio_freqs = get_trio_frequencies(historical_draws)
+    successful_trios = {trio for trio, count in trio_freqs.items() if count > 1}
 
-    # If still fewer than target_size, just return what we have
-    return sorted(final_prediction)[:target_size]
+    # 2. Select a pool of top candidates from Phase 1 scoring
+    candidate_pool = [num for num, score in sorted(scores.items(), key=lambda item: item[1], reverse=True)[:16]]
+
+    if len(candidate_pool) < target_size:
+        return sorted(candidate_pool)
+
+    # 3. Find the best 4-number combination from the candidate pool
+    best_combo = None
+    max_combo_score = -1
+    TRIO_BONUS = 500  # Significant bonus for forming a historically successful trio
+
+    for combo in itertools.combinations(candidate_pool, target_size):
+        combo_score = sum(scores[num] for num in combo)
+        
+        # Check for successful trios within this 4-number combo
+        num_successful_trios = 0
+        for trio in itertools.combinations(combo, 3):
+            if tuple(sorted(trio)) in successful_trios:
+                num_successful_trios += 1
+        
+        combo_score += num_successful_trios * TRIO_BONUS
+
+        if combo_score > max_combo_score:
+            max_combo_score = combo_score
+            best_combo = combo
+
+    return sorted(list(best_combo)) if best_combo else sorted(candidate_pool[:target_size])
 
 
 def generate_live_prediction(historical_draws):
@@ -431,14 +457,14 @@ def generate_live_prediction(historical_draws):
     prediction = predict_strategy(base_mains, bonus1, bonus2, historical_draws[1:])
     
     return {
-        'strategy_used': 'dynamic_adaptive_scoring_v8',
+        'strategy_used': 'combinatorial_analysis_v9',
         'prediction': prediction
     }
 
 
 def backtest_strategy(draws_data):
     """
-    Performs a true backtest on historical data using the v8 model.
+    Performs a true backtest on historical data using the v9 model.
     """
     logging.debug(f"backtest_strategy received {len(draws_data)} draws for processing.")
     results = []
@@ -448,7 +474,6 @@ def backtest_strategy(draws_data):
         return [], [], []
 
     # This loop iterates through all possible draws for which a valid prediction can be made.
-    # It stops when there are fewer than 27 historical draws left for the prediction algorithm.
     for i in range(len(draws_data) - 27):
         target_actual_draw = draws_data[i]
         base_draw_for_prediction = draws_data[i + 1]
@@ -460,7 +485,7 @@ def backtest_strategy(draws_data):
         
         target_timestamp, target_mains, _, _, target_draw_type = target_actual_draw
         
-        # Generate the prediction using the v8 strategy.
+        # Generate the prediction using the v9 strategy.
         predicted_mains = predict_strategy(base_draw_mains, base_draw_b1, base_draw_b2, historical_data_for_prediction)
         
         hits = len(set(predicted_mains).intersection(set(target_mains)))
@@ -469,7 +494,7 @@ def backtest_strategy(draws_data):
             'target_draw_time': target_timestamp,
             'draw_date': target_timestamp.strftime('%Y-%m-%d'),
             'draw_type': target_draw_type,
-            'strategy_used': 'dynamic_adaptive_scoring_v8',
+            'strategy_used': 'combinatorial_analysis_v9',
             'bonus': [base_draw_b1, base_draw_b2],
             'prediction': predicted_mains,
             'actual_mains': target_mains,
