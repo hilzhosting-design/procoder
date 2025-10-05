@@ -184,11 +184,12 @@ def send_telegram_message(message, chat_id):
 GOSLOTO_5_50_URL = "https://www.comparethelotto.com/za/gosloto-5-50-results"
 
 def fetch_draws_from_website():
-    """Fetches Gosloto 5/50 draw results from comparethelotto.com."""
-    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36'}
-    retries = 3
-    for attempt in range(retries):
-        try:
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/536'}
+    api_key = os.getenv("SCRAPER_API_KEY")
+    if not api_key: return [], "SCRAPER_API_KEY environment variable not found."
+    target_url = "https://www.comparethelotto.com/za/gosloto-5-50-results"
+    api_request_url = f"http://api.scraperapi.com?api_key={api_key}&url={target_url}"
+    try:
             response = requests.get(GOSLOTO_5_50_URL, timeout=15, headers=headers)
             response.raise_for_status()
             soup = BeautifulSoup(response.text, "html.parser")
