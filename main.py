@@ -191,61 +191,70 @@ def fetch_draws_from_website():
     target_url = "https://www.comparethelotto.com/za/gosloto-5-50-results"
     api_request_url = f"http://api.scraperapi.com?api_key={api_key}&url={target_url}"
     try:
-            response = requests.get(GOSLOTO_5_50_URL, timeout=15, headers=headers)
-            response.raise_for_status()
-            soup = BeautifulSoup(response.text, "html.parser")
-            historical_results_body = soup.select_one("div#historicalResults > div.card-body")
-            if not historical_results_body:
-                logging.warning("Could not find historical results container.")
-                time.sleep(5)
+        response = requests.get(GOSLOTO_5_50_URL, timeout=15, headers=headers)
+        response.raise_for_status()
+        soup = BeautifulSoup(response.text, "html.parser")
+        historical_results_body = soup.select_one("div#historicalResults > div.card-body")
+        if not historical_results_body:
+            logging.warning("Could not find historical results container.")
+            # This 'continue' will raise a SyntaxError because it's not in a loop.
+            # The surrounding logic for retries seems to have been removed.
+            # time.sleep(5) 
+            # continue
+            return [], "Could not find historical results container."
+
+        raw_draws_with_timestamps = []
+        draw_start_points = historical_results_body.find_all('p', class_='text-muted')
+        for date_p_tag in draw_start_points:
+            full_date_time_text = date_p_tag.get_text(separator=' ').strip()
+            clean_date_time_text = re.sub(r'<[^>]+>|&nbsp;', ' ', full_date_time_text).strip()
+            clean_date_time_text = re.sub(r'^\w{3}\s+', '', clean_date_time_text)
+            clean_date_time_text = re.sub(r'(\d+)(st|nd|rd|th)', r'\1', clean_date_time_text)
+            clean_date_time_text = re.sub(r'\s*\([^)]*\)|\s+NEW$', '', clean_date_time_text).strip()
+            
+            try:
+                naive_timestamp = datetime.strptime(clean_date_time_text, '%d %B %Y %H:%M')
+                timestamp = harare_tz.localize(naive_timestamp)
+            except ValueError:
                 continue
 
-            raw_draws_with_timestamps = []
-            draw_start_points = historical_results_body.find_all('p', class_='text-muted')
-            for date_p_tag in draw_start_points:
-                full_date_time_text = date_p_tag.get_text(separator=' ').strip()
-                clean_date_time_text = re.sub(r'<[^>]+>|&nbsp;', ' ', full_date_time_text).strip()
-                clean_date_time_text = re.sub(r'^\w{3}\s+', '', clean_date_time_text)
-                clean_date_time_text = re.sub(r'(\d+)(st|nd|rd|th)', r'\1', clean_date_time_text)
-                clean_date_time_text = re.sub(r'\s*\([^)]*\)|\s+NEW$', '', clean_date_time_text).strip()
-                
-                try:
-                    naive_timestamp = datetime.strptime(clean_date_time_text, '%d %B %Y %H:%M')
-                    timestamp = harare_tz.localize(naive_timestamp)
-                except ValueError:
-                    continue
-
-                main_numbers, bonus_numbers = [], []
-                for sibling in date_p_tag.next_siblings:
-                    if sibling.name in ('p', 'hr'): break
-                    if sibling.name == 'span':
-                        try:
-                            num = int(sibling.text.strip())
-                            if 'results-number-bonus' in sibling.get('class', []):
-                                bonus_numbers.append(num)
-                            elif 'results-number' in sibling.get('class', []):
-                                main_numbers.append(num)
-                        except (ValueError, TypeError):
-                            pass
-                
-                if len(main_numbers) == 5 and len(bonus_numbers) == 2:
-                    draw_type = "Morning" if timestamp.hour < 12 else "Evening"
-                    raw_draws_with_timestamps.append((timestamp, sorted(main_numbers), bonus_numbers[0], bonus_numbers[1], draw_type))
+            main_numbers, bonus_numbers = [], []
+            for sibling in date_p_tag.next_siblings:
+                if sibling.name in ('p', 'hr'): break
+                if sibling.name == 'span':
+                    try:
+                        num = int(sibling.text.strip())
+                        if 'results-number-bonus' in sibling.get('class', []):
+                            bonus_numbers.append(num)
+                        elif 'results-number' in sibling.get('class', []):
+                            main_numbers.append(num)
+                    except (ValueError, TypeError):
+                        pass
             
-            raw_draws_with_timestamps.sort(key=lambda x: x[0], reverse=True)
-            unique_draws, seen_draw_identifiers = [], set()
-            for draw in raw_draws_with_timestamps:
-                identifier = (draw[0].strftime('%Y-%m-%d'), draw[4])
-                if identifier not in seen_draw_identifiers:
-                    unique_draws.append(draw)
-                    seen_draw_identifiers.add(identifier)
-            return unique_draws, None
-        except requests.exceptions.RequestException as e:
-            logging.error(f"Attempt {attempt + 1} failed: {e}")
-            if attempt < retries - 1:
-                time.sleep(5)
-            else:
-                return [], f"Error fetching data after {retries} attempts: {e}."
+            if len(main_numbers) == 5 and len(bonus_numbers) == 2:
+                draw_type = "Morning" if timestamp.hour < 12 else "Evening"
+                raw_draws_with_timestamps.append((timestamp, sorted(main_numbers), bonus_numbers[0], bonus_numbers[1], draw_type))
+        
+        raw_draws_with_timestamps.sort(key=lambda x: x[0], reverse=True)
+        unique_draws, seen_draw_identifiers = [], set()
+        for draw in raw_draws_with_timestamps:
+            identifier = (draw[0].strftime('%Y-%m-%d'), draw[4])
+            if identifier not in seen_draw_identifiers:
+                unique_draws.append(draw)
+                seen_draw_identifiers.add(identifier)
+        return unique_draws, None
+    except requests.exceptions.RequestException as e:
+        # The following logic is flawed as 'attempt' and 'retries' are not defined.
+        # This part of the code will raise a NameError if this exception is caught.
+        # I have indented it correctly based on its position relative to the 'try' block.
+        # logging.error(f"Attempt {attempt + 1} failed: {e}")
+        # if attempt < retries - 1:
+        #     time.sleep(5)
+        # else:
+        #     return [], f"Error fetching data after {retries} attempts: {e}."
+        logging.error(f"Request failed: {e}")
+        return [], f"Error fetching data: {e}."
+
     return [], "Unexpected error in fetch_draws_from_website."
 
 def store_draws_to_firestore(draws_data):
@@ -405,7 +414,6 @@ def predict_strategy(base_mains, bonus1, bonus2, historical_draws, target_size=4
     for num, freq in recency_freqs.items():
         scores[num] += int(freq * 12)
 
-    # --- Final Selection ---
     # --- Final Selection ---
     final_prediction = list(set(guaranteed_pool))  # anchors first
     sorted_candidates = sorted(scores, key=lambda n: scores[n], reverse=True)
