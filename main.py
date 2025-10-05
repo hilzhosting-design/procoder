@@ -11,6 +11,7 @@ from functools import wraps
 import atexit
 import logging
 import time # Import the time module for sleep
+from threading import Thread
 
 # Set logging level to DEBUG to capture all detailed messages
 logging.basicConfig(level=logging.DEBUG, format='[%(asctime)s] %(levelname)s: %(message)s')
@@ -795,11 +796,21 @@ def admin_delete_user(uid):
 @login_required
 @admin_required
 def force_prediction_update():
+    """
+    Initiates the scraping and prediction job in a background thread
+    to avoid blocking the web server and causing a timeout.
+    """
     try:
-        scrape_and_process_draws_job()
-        flash("Prediction update initiated successfully!", "success")
+        # Create a new thread to run the job
+        thread = Thread(target=scrape_and_process_draws_job)
+        thread.daemon = True  # Allows the main app to exit even if thread is running
+        thread.start()
+        
+        flash("Prediction update has been successfully initiated in the background! The process may take a minute to complete.", "success")
     except Exception as e:
-        flash(f"Error forcing prediction update: {e}", "error")
+        flash(f"Error initiating the background prediction update: {e}", "error")
+        logging.error(f"Failed to start scrape_and_process_draws_job thread: {e}")
+        
     return redirect(url_for('admin_panel'))
 
 @app.route('/admin_send_results', methods=['POST'])
