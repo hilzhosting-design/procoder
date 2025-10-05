@@ -182,7 +182,6 @@ def send_telegram_message(message, chat_id):
 
 # --- Web Scraping and Data Processing ---
 
-
 def fetch_draws_from_website():
     headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/536'}
     api_key = os.getenv("SCRAPER_API_KEY")
