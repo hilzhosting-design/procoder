@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel - HBet 5/50</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%231a1a1a'/><text x='50%' y='50%' dominant-baseline='middle' text-anchor='middle' font-family='Inter, sans-serif' font-size='12' fill='white'>H</text></svg>" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0d1117; /* Darker, GitHub-like background */
+            color: #e2e8f0; /* Light gray text */
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 1rem;
+        }
+        .container {
+            max-width: 800px;
+            width: 100%;
+            background-color: #1a202c;
+            padding: 2.5rem;
+            border-radius: 1.5rem;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            margin-top: 2rem;
+            border: 1px solid #2d3748;
+        }
+        .flash-message {
+            padding: 1rem;
+            margin-bottom: 1.5rem;
+            border-radius: 0.75rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: 600;
+            color: #fff;
+            position: relative;
+            animation: fadeIn 0.5s ease-out;
+            border: 1px solid;
+        }
+        .flash-message.success { background-color: #059669; border-color: #047857;}
+        .flash-message.error { background-color: #dc2626; border-color: #b91c1c;}
+        .flash-message.info { background-color: #2563eb; border-color: #1d4ed8;}
+        .flash-message.warning { background-color: #d97706; border-color: #b45309;}
+        .flash-message .close-button {
+            background: none;
+            border: none;
+            color: inherit;
+            font-size: 1.75rem;
+            cursor: pointer;
+            margin-left: 1rem;
+            line-height: 1;
+            opacity: 0.7;
+            transition: opacity 0.2s;
+        }
+        .flash-message .close-button:hover {
+            opacity: 1;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.75rem;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            border: none;
+            position: relative;
+            overflow: hidden;
+            z-index: 1;
+            width: 100%; /* Make buttons full width */
+            font-size: 1.25rem; /* Match font size of links */
+        }
+        .btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.1);
+            transition: all 0.3s ease;
+            z-index: -1;
+        }
+        .btn:hover::before {
+            left: 0;
+        }
+        .btn-primary {
+            background-color: #4f46e5; /* Indigo-600 */
+            color: white;
+            box-shadow: 0 4px 10px rgba(79, 70, 229, 0.3);
+        }
+        .btn-primary:hover {
+            background-color: #4338ca; /* Indigo-700 */
+            box-shadow: 0 6px 15px rgba(79, 70, 229, 0.4);
+            transform: translateY(-2px);
+        }
+        .btn-success {
+            background-color: #059669; /* Emerald-600 */
+            color: white;
+            box-shadow: 0 4px 10px rgba(5, 150, 105, 0.3);
+        }
+        .btn-success:hover {
+            background-color: #047857; /* Emerald-700 */
+            box-shadow: 0 6px 15px rgba(5, 150, 105, 0.4);
+            transform: translateY(-2px);
+        }
+        .admin-link {
+            display: block;
+            width: 100%;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.75rem;
+            background-color: #2d3748;
+            color: #e2e8f0;
+            font-weight: 600;
+            font-size: 1.25rem;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+            border: 1px solid #4a5568;
+            text-align: center;
+        }
+        .admin-link:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
+            background-color: #3a455a;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="text-center mb-10 p-6 bg-[#1a202c] rounded-xl shadow-xl">
+            <h1 class="text-6xl font-extrabold text-white tracking-tight leading-tight mb-2">Hilzhosting 5/50</h1>
+            <p class="text-gray-400 text-xl mt-1">Admin Panel</p>
+            <nav class="mt-6">
+                <ul class="flex flex-wrap justify-center gap-x-8 gap-y-4 text-indigo-300 text-lg font-semibold">
+                    <li><a href="{{ url_for('index') }}" class="hover:text-indigo-200 transition duration-200 ease-in-out px-3 py-1 rounded-md">Home</a></li>
+                </ul>
+            </nav>
+        </header>
+
+        <!-- Flash Messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div class="w-full mb-6">
+                    {% for category, message in messages %}
+                        <div class="flash-message {{ category }}">
+                            <span>{{ message }}</span>
+                            <button class="close-button" aria-label="Close" onclick="this.parentElement.remove()">&times;</button>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+
+        <section class="space-y-6">
+            <h2 class="text-3xl font-bold text-white mb-6 text-center">Admin Options</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Navigation Links -->
+                <a href="{{ url_for('admin_users') }}" class="admin-link">Manage Users</a>
+                <a href="{{ url_for('admin_banner_settings') }}" class="admin-link">Manage Banner</a>
+                <a href="{{ url_for('set_admin_claim') }}" class="admin-link">Set Admin Claims</a>
+                <a href="{{ url_for('backtest_results_page') }}" class="admin-link">View Backtest</a>
+
+                <!-- Action Buttons -->
+                <form action="{{ url_for('force_prediction_update') }}" method="POST" class="w-full">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-sync-alt mr-2"></i> Force Prediction
+                    </button>
+                </form>
+                <form action="{{ url_for('admin_send_results') }}" method="POST" class="w-full">
+                    <button type="submit" class="btn btn-success">
+                        <i class="fas fa-paper-plane mr-2"></i> Share Latest Hits
+                    </button>
+                </form>
+            </div>
+        </section>
+
+        <!-- Footer -->
+        <footer class="text-center text-gray-500 text-sm mt-12 p-6 bg-[#1a202c] rounded-xl shadow-inner select-none w-full">
+          <p>
+            &copy; {{ now.year if now else '2025' }} Hilzhosting. All rights reserved.
+          </p>
+          <p>Disclaimer: This tool is for entertainment and informational purposes only.</p>
+        </footer>
+    </div>
+</body>
+</html>
