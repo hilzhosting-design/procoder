@@ -406,14 +406,26 @@ def inject_global_data():
         except Exception as e: logging.error(f"Could not fetch email for view_as_uid: {e}")
     return dict(logged_in='firebase_uid' in session, is_subscribed=is_subscribed, is_admin=session.get('is_admin', False), banner_message=banner_message, now=datetime.now(harare_tz), firebase_web_client_config_json=FIREBASE_WEB_CLIENT_CONFIG_JSON, view_as_user_email=view_as_user_email)
 
-@app.route('/')
-def index():
-    if db is None:
-        flash("Database not initialized.", "error")
-        return render_template('index.html', error="Database connection error.")
-    # (Your existing index route logic here, it should be compatible)
-    return render_template('index.html') # Placeholder, add your full index logic
-
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        id_token = request.json.get('idToken')
+        try:
+            decoded_token = auth.verify_id_token(id_token)
+            uid = decoded_token['uid']
+            session['firebase_uid'] = uid
+            session['is_admin'] = decoded_token.get('admin', False)
+            user_doc = get_user_doc_ref(uid).get()
+            if user_doc.exists:
+                session['is_subscribed'] = user_doc.to_dict().get('is_subscribed', False)
+            else: # Create user doc on first login
+                get_user_doc_ref(uid).set({'email': decoded_token.get('email'), 'is_subscribed': False}, merge=True)
+                session['is_subscribed'] = False
+            return jsonify(success=True, redirect=url_for('index'))
+        except Exception as e:
+            return jsonify(success=False, message=str(e)), 401
+    return render_template('login.html')
+    
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
@@ -531,6 +543,43 @@ def backtest_results_page():
             result['target_draw_time'] = datetime.fromisoformat(result['target_draw_time'])
 
     return render_template('backtest_results.html', backtest_status=status, **backtest_data)
+
+
+@app.route('/telegram_settings', methods=['GET', 'POST'])
+@login_required
+@subscription_required
+def telegram_settings():
+    user_doc_ref = get_user_doc_ref(session['firebase_uid'])
+    if request.method == 'POST':
+        chat_id = request.form.get('telegram_chat_id', '').strip()
+        if chat_id:
+            user_doc_ref.update({'telegram_chat_id': chat_id})
+            flash("Telegram Chat ID updated!", "success")
+        return redirect(url_for('telegram_settings'))
+    user_data = user_doc_ref.get().to_dict() or {}
+    return render_template('telegram_settings.html', current_chat_id=user_data.get('telegram_chat_id', ''))
+
+@app.route('/send_alert', methods=['POST'])
+@login_required
+@subscription_required
+def send_alert():
+    user_doc = get_user_doc_ref(session['firebase_uid']).get()
+    chat_id = user_doc.to_dict().get('telegram_chat_id') if user_doc.exists else None
+    if not chat_id:
+        flash("Telegram Chat ID not set.", "error")
+        return redirect(url_for('telegram_settings'))
+    
+    pred_doc = get_public_prediction_doc_ref().get()
+    if not pred_doc.exists:
+        flash("No current prediction available.", "error")
+        return redirect(url_for('index'))
+        
+    pred_data = pred_doc.to_dict()
+    msg = f"🔮 Hilzhosting 5/50 Prediction 🔮\n\nMains: <b>{', '.join(map(str, pred_data.get('prediction', [])))}</b>\nBonuses: <b>{', '.join(map(str, pred_data.get('bonus', [])))}</b>\n\nGood luck!"
+    success, message = send_telegram_message(msg, chat_id)
+    flash(message, "success" if success else "error")
+    return redirect(url_for('index'))
+
 
 
 # --- Backtest Background Job with Positional Analysis ---
