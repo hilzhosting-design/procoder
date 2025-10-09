@@ -405,26 +405,7 @@ def inject_global_data():
             view_as_user_email = user_record.email
         except Exception as e: logging.error(f"Could not fetch email for view_as_uid: {e}")
     return dict(logged_in='firebase_uid' in session, is_subscribed=is_subscribed, is_admin=session.get('is_admin', False), banner_message=banner_message, now=datetime.now(harare_tz), firebase_web_client_config_json=FIREBASE_WEB_CLIENT_CONFIG_JSON, view_as_user_email=view_as_user_email)
-
-@app.route('/login', methods=['GET', 'POST'])
-def login():
-    if request.method == 'POST':
-        id_token = request.json.get('idToken')
-        try:
-            decoded_token = auth.verify_id_token(id_token)
-            uid = decoded_token['uid']
-            session['firebase_uid'] = uid
-            session['is_admin'] = decoded_token.get('admin', False)
-            user_doc = get_user_doc_ref(uid).get()
-            if user_doc.exists:
-                session['is_subscribed'] = user_doc.to_dict().get('is_subscribed', False)
-            else: # Create user doc on first login
-                get_user_doc_ref(uid).set({'email': decoded_token.get('email'), 'is_subscribed': False}, merge=True)
-                session['is_subscribed'] = False
-            return jsonify(success=True, redirect=url_for('index'))
-        except Exception as e:
-            return jsonify(success=False, message=str(e)), 401
-    return render_template('login.html')
+    
     
 @app.route('/login', methods=['GET', 'POST'])
 def login():
