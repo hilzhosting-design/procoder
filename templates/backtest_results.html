@@ -303,6 +303,32 @@
                     <div class="stat-value text-yellow-400">{{ "%.2f"|format(average_hit_rate) }}%</div>
                     <div class="stat-label">Average Hit Rate</div>
                 </div>
+
+                <div class="col-md-6">
+    <div class="card">
+        <div class="card-header">
+            Positional Hit Analysis (Winning Line)
+        </div>
+        <ul class="list-group list-group-flush">
+            <li class="list-group-item d-flex justify-content-between align-items-center">
+                Total Hits from Top 1 Prediction
+                <span class="badge bg-primary rounded-pill">{{ total_top_1_hits }}</span>
+            </li>
+            <li class="list-group-item d-flex justify-content-between align-items-center">
+                Total Hits from Top 2 Predictions
+                <span class="badge bg-primary rounded-pill">{{ total_top_2_hits }}</span>
+            </li>
+            <li class="list-group-item d-flex justify-content-between align-items-center">
+                Total Hits from Top 3 Predictions
+                <span class="badge bg-primary rounded-pill">{{ total_top_3_hits }}</span>
+            </li>
+        </ul>
+    </div>
+</div>
+
+
+
+                
             </div>
 
             <!-- NEW SECTION: Strategy Hit Performance -->
