@@ -298,8 +298,7 @@ def get_latest_actual_draw():
         return draws[0]
     return None, None, None, None, None
 
-# --- DYNAMIC ADAPTIVE SCORING v11 ---
-# --- HELPER FUNCTIONS FOR v11 STRATEGY (Place these with your other helper functions) ---
+# --- STRATEGY HELPER FUNCTIONS ---
 
 def super_hybrid_pool(bonus):
     """Generates a pool of candidate numbers based on the super hybrid strategy."""
@@ -331,21 +330,18 @@ def get_overdue_numbers(historical_draws, count=5):
     overdue = sorted(draws_since_seen.items(), key=lambda item: item[1], reverse=True)
     return [num for num, _ in overdue[:count]]
 
-def get_strongest_pairs(historical_draws, window=100, count=5):
-    """Finds the most frequently occurring pairs of numbers in a given window."""
-    if not historical_draws: return []
+def get_strongest_pairs(historical_draws, window=50, count=5):
+    """
+    Finds the most frequently occurring pairs of numbers in a recent window.
+    Returns the raw pair tuples with their counts.
+    """
+    if not historical_draws or len(historical_draws) < window: return []
     pair_counts = Counter()
     for _, mains, _, _, _ in historical_draws[:window]:
         for pair in itertools.combinations(sorted(mains), 2):
             pair_counts[pair] += 1
     
-    # Return the individual numbers that make up the most common pairs
-    top_pairs = pair_counts.most_common(count)
-    strong_numbers = set()
-    for pair, _ in top_pairs:
-        strong_numbers.add(pair[0])
-        strong_numbers.add(pair[1])
-    return list(strong_numbers)
+    return pair_counts.most_common(count)
 
 def get_cold_numbers(historical_draws, window=25):
     """Identifies numbers that have NOT appeared in a recent window."""
@@ -397,99 +393,52 @@ def get_following_numbers_pool(base_mains, historical_draws):
     # Return the most common following numbers
     return [num for num, count in Counter(following_numbers).most_common(10)]
 
-
-# --- MODIFIED PREDICTION STRATEGY (v11 with new auto-entry logic) ---
-
+# --- PREDICTION STRATEGY (v15 - Synergy Network) ---
 def predict_strategy(base_mains, bonus1, bonus2, historical_draws, target_size=4):
     """
-    Generates a 4-number prediction using a balanced, multi-pool approach.
-    This strategy uses a "committee of experts" where different analytical pools
-    "vote" on numbers. This is more resilient and better at capturing 2-3 number hits.
+    Generates a 4-number prediction by finding the most interconnected numbers
+    within a network of recent strong pairs.
     """
-    if not historical_draws:
+    if not historical_draws or len(historical_draws) < 50:
+        # This strategy requires a significant number of draws to find reliable pairs.
         return []
 
-    scores = Counter()
-
-    # --- Pool 1: The Anchor Pool (High-Confidence Starters) ---
-    # This provides a deterministic, logical starting point based on the last draw.
-
-    # First auto entry number (NEW LOGIC: Sum of bonuses * 2)
-    calculated_auto_entry = (bonus1 + bonus2) * 2
-    if 1 <= calculated_auto_entry <= 50:
-        auto_entry_number = calculated_auto_entry
-    else:
-        # Fallback if the number is out of the 1-50 range
-        fallback_sum = bonus1 + bonus2
-        if 1 <= fallback_sum <= 50:
-            auto_entry_number = fallback_sum
-        else:
-            auto_entry_number = bonus1 # Final fallback if sum is also out of range
-
-    # Second auto entry number based on user-provided lotto strategy pseudocode
-    lotto_strategy_number = 0  # Default value
-    try:
-        sum_mains = sum(base_mains)
-        decimal_bonus = float(f"{bonus1}.{bonus2}")
-        code = int(sum_mains + decimal_bonus)
-        code_str = str(code)
-
-        if len(code_str) >= 2:
-            first_part = int(code_str[:-1])
-            last_part = int(code_str[-1])
-            calculated_number = first_part - last_part
-            # A lotto number must be positive and within the 1-50 range.
-            if 1 <= calculated_number <= 50:
-                lotto_strategy_number = calculated_number
-            else:
-                lotto_strategy_number = bonus1  # Fallback if out of range or non-positive
-        elif len(code_str) == 1:
-            lotto_strategy_number = int(code_str)
-        else:
-            lotto_strategy_number = bonus2  # Fallback
-
-    except (ValueError, IndexError) as e:
-        logging.error(f"Error calculating lotto_strategy_number: {e}")
-        lotto_strategy_number = bonus2  # Fallback to something simple
-
-    # The two auto-entry numbers now form the new anchor pool
-    anchor_pool = {auto_entry_number, lotto_strategy_number}
+    # --- Step 1: Map the Network ---
+    # Find the top 5 strongest pairs from the last 50 draws.
+    # These pairs form our "synergy network".
+    strongest_pairs = get_strongest_pairs(historical_draws, window=50, count=5)
     
-    for num in anchor_pool:
-        scores[num] += 3 # Heavy weight for our strongest candidates
+    if not strongest_pairs:
+        # Fallback if no pairs are found.
+        return [num for num, score in Counter([n for d in historical_draws[:10] for n in d[1]]).most_common(4)]
 
-    # --- Pool 2: The Frequency & Trend Pool ---
-    # This pool looks at individual number behavior: hot streaks and overdue numbers.
-    hot_pool = get_hot_numbers(historical_draws, window=15, count=5)
-    overdue_pool = get_overdue_numbers(historical_draws, count=5)
+    # --- Step 2: Calculate "Synergy Score" ---
+    # Score each number based on its appearance in the strong pairs.
+    # A higher score means the number is more "connected" in the network.
+    synergy_scores = Counter()
+    for pair_tuple, frequency in strongest_pairs:
+        num1, num2 = pair_tuple
+        # Each number in a pair gets points equal to how often that pair appeared.
+        synergy_scores[num1] += frequency
+        synergy_scores[num2] += frequency
+
+    # --- Step 3: Select the Core Cluster ---
+    # The prediction is the top 4 numbers with the highest synergy scores.
+    # These are the most influential numbers in the network.
+    final_prediction = [num for num, score in synergy_scores.most_common(target_size)]
     
-    frequency_pool = set(hot_pool + overdue_pool)
-    for num in frequency_pool:
-        scores[num] += 1 # Standard weight for general trends
+    # If there are fewer than 4 unique numbers in the top pairs (rare),
+    # fill the remaining slots with hot numbers.
+    if len(final_prediction) < target_size:
+        hot_pool = get_hot_numbers(historical_draws, window=15, count=10)
+        for num in hot_pool:
+            if len(final_prediction) >= target_size:
+                break
+            if num not in final_prediction:
+                final_prediction.append(num)
 
-    # --- Pool 3: The Relational Pool (How numbers play together) ---
-    # This is key for 3+ hits. It finds numbers that frequently appear together.
-    strong_pair_pool = get_strongest_pairs(historical_draws, window=100, count=5)
-    for num in strong_pair_pool:
-        scores[num] += 2 # Medium-high weight, as pairings are a strong indicator
+    return sorted(final_prediction)
 
-    # --- Pool 4: The Bonus-Driven Pool ---
-    # Simple, direct candidates derived from the previous draw's bonus numbers.
-    bonus_hybrid_pool = set(super_hybrid_pool(bonus1) + super_hybrid_pool(bonus2))
-    for num in bonus_hybrid_pool:
-        scores[num] += 1 # Standard weight
-
-    # --- Final Selection ---
-    # Select the numbers that received the most "votes" from the different pools.
-    
-    # If there are no scores, return a fallback based on simple frequency
-    if not scores:
-        return get_hot_numbers(historical_draws, window=20, count=target_size)
-        
-    # Get the top N candidates based on the final scores
-    final_candidates = [num for num, score in scores.most_common(target_size)]
-    
-    return sorted(final_candidates)
 
 def generate_live_prediction(historical_draws):
     """
@@ -506,23 +455,23 @@ def generate_live_prediction(historical_draws):
     prediction = predict_strategy(base_mains, bonus1, bonus2, historical_draws[1:])
     
     return {
-        'strategy_used': 'dynamic_adaptive_scoring_v11',
+        'strategy_used': 'synergy_network_v15',
         'prediction': prediction
     }
 
 
 def backtest_strategy(draws_data):
     """
-    Performs a true backtest on historical data using the v11 model.
+    Performs a true backtest on historical data using the v15 model.
     """
     logging.debug(f"backtest_strategy received {len(draws_data)} draws for processing.")
     results = []
-    # Need at least 27 draws for a valid backtest window.
-    if len(draws_data) < 27:
-        logging.info(f"Not enough draws for a valid backtest (need at least 27). Got {len(draws_data)}. Skipping.")
+    # Need at least 52 draws for a valid backtest window (50 for pairs + 2 for context).
+    if len(draws_data) < 52:
+        logging.info(f"Not enough draws for a valid backtest (need at least 52). Got {len(draws_data)}. Skipping.")
         return [], [], []
 
-    for i in range(len(draws_data) - 26):
+    for i in range(len(draws_data) - 51):
         target_actual_draw = draws_data[i]
         base_draw_for_prediction = draws_data[i + 1]
         historical_data_for_prediction = draws_data[i + 2:]
@@ -533,7 +482,7 @@ def backtest_strategy(draws_data):
         
         target_timestamp, target_mains, _, _, target_draw_type = target_actual_draw
         
-        # Generate the prediction using the v11 strategy.
+        # Generate the prediction using the v15 strategy.
         predicted_mains = predict_strategy(base_draw_mains, base_draw_b1, base_draw_b2, historical_data_for_prediction)
         
         hits = len(set(predicted_mains).intersection(set(target_mains)))
@@ -542,7 +491,7 @@ def backtest_strategy(draws_data):
             'target_draw_time': target_timestamp,
             'draw_date': target_timestamp.strftime('%Y-%m-%d'),
             'draw_type': target_draw_type,
-            'strategy_used': 'dynamic_adaptive_scoring_v11',
+            'strategy_used': 'synergy_network_v15',
             'bonus': [base_draw_b1, base_draw_b2],
             'prediction': predicted_mains,
             'actual_mains': target_mains,
@@ -624,32 +573,48 @@ def index():
     
     live_prediction_history = []
     current_prediction_vs_actual = None
-
-    try:
-        public_prediction_doc = get_public_prediction_doc_ref().get()
-        if public_prediction_doc.exists:
-            pred_data = public_prediction_doc.to_dict()
-            unresolved = PredictionResult(normalize_to_harare_time(pred_data.get('target_draw_time')), pred_data.get('strategy_used'), pred_data.get('bonus'), pred_data.get('prediction'))
-            live_prediction_history.append(unresolved)
-    except Exception as e:
-        logging.error(f"Could not fetch public prediction: {e}")
-
     is_subscribed_for_view = False
-    if uid_to_view:
-        user_doc = get_user_doc_ref(uid_to_view).get()
-        if user_doc.exists:
-            is_subscribed_for_view = user_doc.to_dict().get('is_subscribed', False)
 
+    if uid_to_view:
+        try:
+            user_doc = get_user_doc_ref(uid_to_view).get()
+            if user_doc.exists:
+                is_subscribed_for_view = user_doc.to_dict().get('is_subscribed', False)
+        except Exception as e:
+            logging.error(f"Error checking subscription status for {uid_to_view}: {e}")
+
+    # Subscribed users see their detailed, personal prediction history
     if uid_to_view and is_subscribed_for_view:
         try:
             history_docs = get_user_predictions_history_ref(uid_to_view).order_by('target_draw_time', direction=firestore.Query.DESCENDING).limit(10).stream()
             for doc in history_docs:
                 data = doc.to_dict()
                 pred_time = normalize_to_harare_time(data.get('target_draw_time'))
-                if not live_prediction_history or pred_time != live_prediction_history[0].target_draw_time:
-                    live_prediction_history.append(PredictionResult(pred_time, data.get('strategy_used'), data.get('bonus'), data.get('prediction'), data.get('actual_mains'), data.get('actual_bonuses'), data.get('hits')))
+                live_prediction_history.append(PredictionResult(
+                    pred_time, data.get('strategy_used'), data.get('bonus'), 
+                    data.get('prediction'), data.get('actual_mains'), 
+                    data.get('actual_bonuses'), data.get('hits')
+                ))
         except Exception as e:
-            logging.error(f"Error fetching prediction history: {e}")
+            logging.error(f"Error fetching user prediction history: {e}")
+    # Non-subscribed or logged-out users see the public history to prevent the "overwriting" view
+    else:
+        try:
+            history_docs = get_public_prediction_history_ref().order_by('target_draw_time', direction=firestore.Query.DESCENDING).limit(10).stream()
+            for doc in history_docs:
+                data = doc.to_dict()
+                pred_time = normalize_to_harare_time(data.get('target_draw_time'))
+                live_prediction_history.append(PredictionResult(
+                    target_draw_time=pred_time,
+                    strategy_used=data.get('strategy_used', 'synergy_network_v15'),
+                    bonus=data.get('bonus', []),
+                    prediction=data.get('prediction', []),
+                    actual_mains=data.get('actual_mains'),
+                    actual_bonuses=data.get('actual_bonuses'),
+                    hits=data.get('hits')
+                ))
+        except Exception as e:
+            logging.error(f"Could not fetch public prediction history: {e}")
 
     if live_prediction_history:
         current_prediction_vs_actual = live_prediction_history[0]
@@ -947,25 +912,36 @@ def scrape_and_process_draws_job():
         latest_actual_bonus1 = historical_draws[0][2]
         latest_actual_bonus2 = historical_draws[0][3]
         next_target_draw_time = get_next_target_draw_time(datetime.now(harare_tz))
+        
+        prediction_payload = {
+            'target_draw_time': next_target_draw_time,
+            'strategy_used': strategy_used,
+            'bonus': [latest_actual_bonus1, latest_actual_bonus2],
+            'prediction': predicted_mains,
+            'actual_mains': [], 'actual_bonuses': [], 'hits': None,
+            'timestamp_generated': firestore.SERVER_TIMESTAMP
+        }
 
         try:
-            # Save the new public prediction
-            get_public_prediction_doc_ref().set({
-                'target_draw_time': next_target_draw_time,
-                'strategy_used': strategy_used,
-                'bonus': [latest_actual_bonus1, latest_actual_bonus2],
-                'prediction': predicted_mains,
-                'actual_mains': [], 'actual_bonuses': [], 'hits': 0,
-                'timestamp_generated': firestore.SERVER_TIMESTAMP
-            }, merge=True)
-            logging.info(f"Saved new public prediction: {predicted_mains}")
+            # --- START OF THE NEW IDEMPOTENCY CHECK ---
+            history_ref = get_public_prediction_history_ref()
+            # Check if a prediction for this exact target time already exists
+            existing_prediction_query = history_ref.where(
+                filter=FieldFilter('target_draw_time', '==', next_target_draw_time)
+            ).limit(1).get()
 
-            # Save to public history for repetition checks
-            get_public_prediction_history_ref().add({
-                'prediction': predicted_mains,
-                'target_draw_time': next_target_draw_time,
-                'timestamp_generated': firestore.SERVER_TIMESTAMP
-            })
+            if len(list(existing_prediction_query)) > 0:
+                logging.warning(f"Prediction for target draw time {next_target_draw_time.isoformat()} already exists in history. Skipping add.")
+            else:
+                # Only add to history if it doesn't exist
+                history_ref.add(prediction_payload)
+                logging.info(f"Added prediction to public history: {predicted_mains}")
+            # --- END OF THE NEW IDEMPOTENCY CHECK ---
+
+            # Save/overwrite the new public prediction (the "current" one)
+            get_public_prediction_doc_ref().set(prediction_payload, merge=True)
+            logging.info(f"Saved/updated current public prediction: {predicted_mains}")
+
         except Exception as e:
             logging.error(f"Failed to save public prediction: {e}")
     else:
@@ -1103,7 +1079,7 @@ def send_results_and_hits_job():
             logging.error(f"Failed to process results for {user['uid']}: {e}")
 
 # --- Schedule All Jobs ---
-scheduler.add_job(scrape_and_process_draws_job, 'cron', hour='8,20', minute='40,45,50,55', id='scrape_process_job', replace_existing=True)
+scheduler.add_job(scrape_and_process_draws_job, 'cron', hour='8,20', minute='59', id='scrape_process_job', replace_existing=True)
 scheduler.add_job(precompute_successful_bonuses_job, 'cron', hour='3', minute='0', id='precompute_bonuses_job', replace_existing=True)
 scheduler.add_job(send_prediction_alerts_job, 'cron', hour='7,19', minute='30', id='send_prediction_alerts_job', replace_existing=True)
 scheduler.add_job(send_results_and_hits_job, 'cron', hour='8,20', minute='35,40', id='send_results_hits_job', replace_existing=True)
