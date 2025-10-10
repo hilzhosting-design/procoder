@@ -511,7 +511,8 @@ def generate_live_prediction(historical_draws):
 
 def backtest_strategy(draws_data):
     """
-    Performs a true backtest on historical data using the v12 model.
+    Performs a true backtest on historical data using the v12 model,
+    including positional hit analysis.
     """
     logging.debug(f"backtest_strategy received {len(draws_data)} draws for processing.")
     results = []
@@ -534,7 +535,29 @@ def backtest_strategy(draws_data):
         # Generate the prediction using the v12 strategy.
         predicted_mains = predict_strategy(base_draw_mains, base_draw_b1, base_draw_b2, historical_data_for_prediction)
         
+        # Standard hit calculation
         hits = len(set(predicted_mains).intersection(set(target_mains)))
+
+        # NEW: Positional hit calculation
+        positional_hits = {
+            'top_1_hits': 0,
+            'top_2_hits': 0,
+            'top_3_hits': 0,
+        }
+        if predicted_mains:
+            target_mains_set = set(target_mains)
+            # Hits within the first predicted number
+            positional_hits['top_1_hits'] = 1 if predicted_mains[0] in target_mains_set else 0
+            # Hits within the first two predicted numbers
+            if len(predicted_mains) >= 2:
+                positional_hits['top_2_hits'] = len(set(predicted_mains[:2]).intersection(target_mains_set))
+            else:
+                positional_hits['top_2_hits'] = positional_hits['top_1_hits']
+            # Hits within the first three predicted numbers
+            if len(predicted_mains) >= 3:
+                positional_hits['top_3_hits'] = len(set(predicted_mains[:3]).intersection(target_mains_set))
+            else:
+                positional_hits['top_3_hits'] = positional_hits['top_2_hits']
 
         results.append({
             'target_draw_time': target_timestamp,
@@ -545,7 +568,8 @@ def backtest_strategy(draws_data):
             'prediction': predicted_mains,
             'actual_mains': target_mains,
             'actual_bonuses': [target_actual_draw[2], target_actual_draw[3]],
-            'hits': hits
+            'hits': hits,
+            'positional_hits': positional_hits # Add new positional data
         })
 
     main_ranking = Counter(num for _, mains, _, _, _ in draws_data for num in mains).most_common()
@@ -676,6 +700,11 @@ def backtest_results_page():
     total_predicted = sum(len(r.get('prediction', [])) for r in backtest_results)
     avg_hit_rate = (total_hits / total_predicted) * 100 if total_predicted > 0 else 0
     
+    # NEW: Calculate total positional hits
+    total_top_1_hits = sum(r['positional_hits']['top_1_hits'] for r in backtest_results)
+    total_top_2_hits = sum(r['positional_hits']['top_2_hits'] for r in backtest_results)
+    total_top_3_hits = sum(r['positional_hits']['top_3_hits'] for r in backtest_results)
+
     return render_template('backtest_results.html', backtest_results=backtest_results, total_backtests=len(backtest_results),
                            average_hit_rate=avg_hit_rate,
                            total_5_hits=sum(1 for r in backtest_results if r['hits'] == 5),
@@ -685,7 +714,11 @@ def backtest_results_page():
                            total_1_hits=sum(1 for r in backtest_results if r['hits'] >= 1),
                            total_0_hits=sum(1 for r in backtest_results if r['hits'] == 0),
                            main_ranking=main_ranking, bonus_ranking=bonus_ranking,
-                           selected_start_date=start_date, selected_end_date=end_date)
+                           selected_start_date=start_date, selected_end_date=end_date,
+                           # Pass new positional data to the template
+                           total_top_1_hits=total_top_1_hits,
+                           total_top_2_hits=total_top_2_hits,
+                           total_top_3_hits=total_top_3_hits)
     
 # --- Auth Routes (Login, Register, Logout) ---
 @app.route('/login', methods=['GET', 'POST'])
