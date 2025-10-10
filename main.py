@@ -298,8 +298,8 @@ def get_latest_actual_draw():
         return draws[0]
     return None, None, None, None, None
 
-# --- DYNAMIC ADAPTIVE SCORING v11 ---
-# --- HELPER FUNCTIONS FOR v11 STRATEGY (Place these with your other helper functions) ---
+# --- DYNAMIC ADAPTIVE SCORING v11 & v12 ---
+# --- HELPER FUNCTIONS FOR PREDICTION STRATEGIES ---
 
 def super_hybrid_pool(bonus):
     """Generates a pool of candidate numbers based on the super hybrid strategy."""
@@ -324,10 +324,7 @@ def get_overdue_numbers(historical_draws, count=5):
 
     if not last_seen: return []
     
-    # Calculate how many draws ago each number appeared (most recent is len(historical_draws))
     draws_since_seen = {num: len(historical_draws) - (pos -1) for num, pos in last_seen.items()}
-
-    # Simple approach: Return the numbers that haven't been seen the longest
     overdue = sorted(draws_since_seen.items(), key=lambda item: item[1], reverse=True)
     return [num for num, _ in overdue[:count]]
 
@@ -339,7 +336,6 @@ def get_strongest_pairs(historical_draws, window=100, count=5):
         for pair in itertools.combinations(sorted(mains), 2):
             pair_counts[pair] += 1
     
-    # Return the individual numbers that make up the most common pairs
     top_pairs = pair_counts.most_common(count)
     strong_numbers = set()
     for pair, _ in top_pairs:
@@ -360,7 +356,6 @@ def get_recency_weighted_frequencies(historical_draws):
     frequencies = defaultdict(float)
     total_draws = len(historical_draws)
     for i, draw in enumerate(historical_draws):
-        # Weight decays from 1.0 for the most recent draw down to a small fraction for the oldest.
         weight = (total_draws - i) / total_draws
         for num in draw[1]: # Main numbers
             frequencies[num] += weight
@@ -371,7 +366,6 @@ def get_pairing_frequencies(guaranteed_pool, historical_draws):
     pair_counts = defaultdict(int)
     for _, mains, _, _, _ in historical_draws:
         mains_set = set(mains)
-        # If any of the guaranteed numbers are in this draw, count their partners.
         if not set(guaranteed_pool).isdisjoint(mains_set):
             for num in mains_set:
                 if num not in guaranteed_pool:
@@ -385,20 +379,16 @@ def get_following_numbers_pool(base_mains, historical_draws):
     """
     following_numbers = []
     base_mains_set = set(base_mains)
-    # Iterate backwards through history to find the draw that follows a match
     for i in range(len(historical_draws) - 1):
         current_mains = set(historical_draws[i][1])
         previous_mains = set(historical_draws[i+1][1])
-        # If the previous draw has any of our base numbers...
         if not base_mains_set.isdisjoint(previous_mains):
-            # ...then the numbers in the current draw are "following numbers".
             following_numbers.extend(list(current_mains))
     
-    # Return the most common following numbers
     return [num for num, count in Counter(following_numbers).most_common(10)]
 
 
-# --- MODIFIED PREDICTION STRATEGY (v11 with new auto-entry logic) ---
+# --- ORIGINAL PREDICTION STRATEGY (v11) ---
 
 def predict_strategy(base_mains, bonus1, bonus2, historical_draws, target_size=4):
     """
@@ -412,84 +402,141 @@ def predict_strategy(base_mains, bonus1, bonus2, historical_draws, target_size=4
     scores = Counter()
 
     # --- Pool 1: The Anchor Pool (High-Confidence Starters) ---
-    # This provides a deterministic, logical starting point based on the last draw.
-
-    # First auto entry number (NEW LOGIC: Sum of bonuses * 2)
     calculated_auto_entry = (bonus1 + bonus2) * 2
     if 1 <= calculated_auto_entry <= 50:
         auto_entry_number = calculated_auto_entry
     else:
-        # Fallback if the number is out of the 1-50 range
         fallback_sum = bonus1 + bonus2
         if 1 <= fallback_sum <= 50:
             auto_entry_number = fallback_sum
         else:
-            auto_entry_number = bonus1 # Final fallback if sum is also out of range
+            auto_entry_number = bonus1
 
-    # Second auto entry number based on user-provided lotto strategy pseudocode
-    lotto_strategy_number = 0  # Default value
+    lotto_strategy_number = 0
     try:
         sum_mains = sum(base_mains)
         decimal_bonus = float(f"{bonus1}.{bonus2}")
         code = int(sum_mains + decimal_bonus)
         code_str = str(code)
-
         if len(code_str) >= 2:
             first_part = int(code_str[:-1])
             last_part = int(code_str[-1])
             calculated_number = first_part - last_part
-            # A lotto number must be positive and within the 1-50 range.
             if 1 <= calculated_number <= 50:
                 lotto_strategy_number = calculated_number
             else:
-                lotto_strategy_number = bonus1  # Fallback if out of range or non-positive
+                lotto_strategy_number = bonus1
         elif len(code_str) == 1:
             lotto_strategy_number = int(code_str)
         else:
-            lotto_strategy_number = bonus2  # Fallback
-
+            lotto_strategy_number = bonus2
     except (ValueError, IndexError) as e:
         logging.error(f"Error calculating lotto_strategy_number: {e}")
-        lotto_strategy_number = bonus2  # Fallback to something simple
+        lotto_strategy_number = bonus2
 
-    # The two auto-entry numbers now form the new anchor pool
     anchor_pool = {auto_entry_number, lotto_strategy_number}
-    
     for num in anchor_pool:
-        scores[num] += 3 # Heavy weight for our strongest candidates
+        scores[num] += 3
 
     # --- Pool 2: The Frequency & Trend Pool ---
-    # This pool looks at individual number behavior: hot streaks and overdue numbers.
     hot_pool = get_hot_numbers(historical_draws, window=15, count=5)
     overdue_pool = get_overdue_numbers(historical_draws, count=5)
-    
     frequency_pool = set(hot_pool + overdue_pool)
     for num in frequency_pool:
-        scores[num] += 1 # Standard weight for general trends
+        scores[num] += 1
 
     # --- Pool 3: The Relational Pool (How numbers play together) ---
-    # This is key for 3+ hits. It finds numbers that frequently appear together.
     strong_pair_pool = get_strongest_pairs(historical_draws, window=100, count=5)
     for num in strong_pair_pool:
-        scores[num] += 2 # Medium-high weight, as pairings are a strong indicator
+        scores[num] += 2
 
     # --- Pool 4: The Bonus-Driven Pool ---
-    # Simple, direct candidates derived from the previous draw's bonus numbers.
     bonus_hybrid_pool = set(super_hybrid_pool(bonus1) + super_hybrid_pool(bonus2))
     for num in bonus_hybrid_pool:
-        scores[num] += 1 # Standard weight
+        scores[num] += 1
 
     # --- Final Selection ---
-    # Select the numbers that received the most "votes" from the different pools.
-    
-    # If there are no scores, return a fallback based on simple frequency
     if not scores:
         return get_hot_numbers(historical_draws, window=20, count=target_size)
-        
-    # Get the top N candidates based on the final scores
     final_candidates = [num for num, score in scores.most_common(target_size)]
-    
     return sorted(final_candidates)
+
+
+# --- DYNAMIC ADAPTIVE SCORING v12 (NEW & IMPROVED) ---
+
+def predict_strategy_v12(base_mains, bonus1, bonus2, historical_draws, target_size=4):
+    """
+    Generates a prediction using a more balanced, multi-pool approach with rank-based scoring.
+    This "committee of experts" model is more resilient and statistically grounded.
+    """
+    if not historical_draws:
+        return []
+
+    scores = Counter()
+    
+    # Define the weights for each pool. This makes tuning easier.
+    score_weights = {
+        'hot': 5,
+        'overdue': 4,
+        'strong_pairs': 6,
+        'bonus_hybrid': 3,
+        'cold': 2,
+        'following': 5
+    }
+
+    # --- Pool 1: The Trend Pool (Hot, Cold & Overdue Numbers) ---
+    # Identifies individual number trends.
+    hot_pool = get_hot_numbers(historical_draws, window=15, count=5)
+    for i, num in enumerate(hot_pool):
+        scores[num] += score_weights['hot'] - i # Rank-based: 5, 4, 3, 2, 1
+
+    overdue_pool = get_overdue_numbers(historical_draws, count=5)
+    for i, num in enumerate(overdue_pool):
+        scores[num] += score_weights['overdue'] - i # Rank-based: 4, 3, 2, 1, 0
+
+    cold_pool = get_cold_numbers(historical_draws, window=25)
+    for num in cold_pool[:5]: # Consider the top 5 coldest numbers
+        scores[num] += score_weights['cold'] # Lower weight for this contrarian pool
+
+    # --- Pool 2: The Relational Pool (How numbers play together) ---
+    # This is key for 3+ hits.
+    strong_pair_pool = get_strongest_pairs(historical_draws, window=100, count=10) # Expanded search
+    for num in strong_pair_pool:
+        scores[num] += score_weights['strong_pairs'] # High, flat weight as all numbers in top pairs are valuable
+
+    # --- Pool 3: The Bonus-Driven Pool ---
+    # Direct candidates derived from the previous draw's bonuses.
+    bonus_hybrid_pool = set(super_hybrid_pool(bonus1) + super_hybrid_pool(bonus2))
+    for num in bonus_hybrid_pool:
+        scores[num] += score_weights['bonus_hybrid']
+
+    # --- Pool 4: The Sequential Pool (What numbers come next) ---
+    # This is a powerful data-driven anchor, replacing the old rigid formulas.
+    following_pool = get_following_numbers_pool(base_mains, historical_draws)
+    for i, num in enumerate(following_pool[:5]):
+        scores[num] += score_weights['following'] - i # Rank-based: 5, 4, 3, 2, 1
+        
+    # --- Final Selection ---
+    if not scores:
+        # Fallback to a simple strategy if no scores were generated
+        return sorted(get_hot_numbers(historical_draws, window=20, count=target_size))
+        
+    # Get the top N candidates based on the final scores.
+    # Exclude the numbers from the last draw's main balls to encourage new combinations.
+    final_candidates = []
+    base_mains_set = set(base_mains)
+    for num, score in scores.most_common(20): # Look through a wider list of candidates
+        if len(final_candidates) >= target_size:
+            break
+        if num not in base_mains_set:
+            final_candidates.append(num)
+            
+    # If filtering removed too many, fill with the top candidates regardless
+    if len(final_candidates) < target_size:
+        final_candidates = [num for num, score in scores.most_common(target_size)]
+
+    return sorted(final_candidates)
+
 
 def generate_live_prediction(historical_draws):
     """
@@ -503,17 +550,17 @@ def generate_live_prediction(historical_draws):
     base_mains = latest_draw[1]
     bonus1, bonus2 = latest_draw[2], latest_draw[3]
 
-    prediction = predict_strategy(base_mains, bonus1, bonus2, historical_draws[1:])
+    prediction = predict_strategy_v12(base_mains, bonus1, bonus2, historical_draws[1:]) # <-- USE V12
     
     return {
-        'strategy_used': 'dynamic_adaptive_scoring_v11',
+        'strategy_used': 'dynamic_adaptive_scoring_v12', # <-- UPDATE NAME
         'prediction': prediction
     }
 
 
 def backtest_strategy(draws_data):
     """
-    Performs a true backtest on historical data using the v11 model.
+    Performs a true backtest on historical data using the v12 model.
     """
     logging.debug(f"backtest_strategy received {len(draws_data)} draws for processing.")
     results = []
@@ -533,8 +580,8 @@ def backtest_strategy(draws_data):
         
         target_timestamp, target_mains, _, _, target_draw_type = target_actual_draw
         
-        # Generate the prediction using the v11 strategy.
-        predicted_mains = predict_strategy(base_draw_mains, base_draw_b1, base_draw_b2, historical_data_for_prediction)
+        # Generate the prediction using the v12 strategy.
+        predicted_mains = predict_strategy_v12(base_draw_mains, base_draw_b1, base_draw_b2, historical_data_for_prediction) # <-- USE V12
         
         hits = len(set(predicted_mains).intersection(set(target_mains)))
 
@@ -542,7 +589,7 @@ def backtest_strategy(draws_data):
             'target_draw_time': target_timestamp,
             'draw_date': target_timestamp.strftime('%Y-%m-%d'),
             'draw_type': target_draw_type,
-            'strategy_used': 'dynamic_adaptive_scoring_v11',
+            'strategy_used': 'dynamic_adaptive_scoring_v12', # <-- UPDATE NAME
             'bonus': [base_draw_b1, base_draw_b2],
             'prediction': predicted_mains,
             'actual_mains': target_mains,
@@ -1025,7 +1072,6 @@ def precompute_successful_bonuses_job():
     for result in backtest_results:
         if result.get('hits', 0) >= 3:
             try:
-                # Get the bonus numbers used for this prediction from the backtest result.
                 bonuses = result.get('bonus', [])
                 for bonus_num in bonuses:
                     successful_bonuses.add(bonus_num)
