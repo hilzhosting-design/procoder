@@ -632,27 +632,38 @@ def index():
 @login_required
 @admin_required
 def backtest_results_page():
-    start_date = None
-    end_date = None
-    historical_draws = get_historical_draws_from_firestore(start_date=start_date, end_date=end_date)
+    """
+    Fetches ALL historical draws from Firestore and runs the backtest strategy on the entire dataset.
+    """
+    # Fetch all historical draws without any limit.
+    historical_draws = get_historical_draws_from_firestore()
+    
     backtest_results, main_ranking, bonus_ranking = [], [], []
     if historical_draws:
+        logging.info(f"Running backtest on {len(historical_draws)} total draws.")
         backtest_results, main_ranking, bonus_ranking = backtest_strategy(historical_draws)
+    else:
+        logging.warning("No historical draws found to run backtest.")
     
     total_hits = sum(r['hits'] for r in backtest_results)
-    total_predicted = sum(len(r.get('prediction', [])) for r in backtest_results)
-    avg_hit_rate = (total_hits / total_predicted) * 100 if total_predicted > 0 else 0
+    # The total number of predictions is 4 for each backtest run.
+    total_predicted_numbers = len(backtest_results) * 4
+    avg_hit_rate = (total_hits / total_predicted_numbers) * 100 if total_predicted_numbers > 0 else 0
     
-    return render_template('backtest_results.html', backtest_results=backtest_results, total_backtests=len(backtest_results),
+    return render_template('backtest_results.html', 
+                           backtest_results=backtest_results, 
+                           total_backtests=len(backtest_results),
                            average_hit_rate=avg_hit_rate,
-                           total_5_hits=sum(1 for r in backtest_results if r['hits'] == 5),
+                           total_5_hits=sum(1 for r in backtest_results if r['hits'] == 5), # Note: Max hits for a 4-num prediction is 4
                            total_4_hits=sum(1 for r in backtest_results if r['hits'] == 4),
                            total_3_hits=sum(1 for r in backtest_results if r['hits'] >= 3),
                            total_2_hits=sum(1 for r in backtest_results if r['hits'] >= 2),
                            total_1_hits=sum(1 for r in backtest_results if r['hits'] >= 1),
                            total_0_hits=sum(1 for r in backtest_results if r['hits'] == 0),
-                           main_ranking=main_ranking, bonus_ranking=bonus_ranking,
-                           selected_start_date=start_date, selected_end_date=end_date)
+                           main_ranking=main_ranking, 
+                           bonus_ranking=bonus_ranking,
+                           selected_start_date=None, # Removed date selection
+                           selected_end_date=None)
     
 # --- Auth Routes (Login, Register, Logout) ---
 @app.route('/login', methods=['GET', 'POST'])
