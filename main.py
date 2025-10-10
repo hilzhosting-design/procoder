@@ -298,8 +298,8 @@ def get_latest_actual_draw():
         return draws[0]
     return None, None, None, None, None
 
-# --- DYNAMIC ADAPTIVE SCORING v11 ---
-# --- HELPER FUNCTIONS FOR v11 STRATEGY (Place these with your other helper functions) ---
+# --- DYNAMIC ADAPTIVE SCORING v12 ---
+# --- HELPER FUNCTIONS FOR v12 STRATEGY (Place these with your other helper functions) ---
 
 def super_hybrid_pool(bonus):
     """Generates a pool of candidate numbers based on the super hybrid strategy."""
@@ -398,98 +398,96 @@ def get_following_numbers_pool(base_mains, historical_draws):
     return [num for num, count in Counter(following_numbers).most_common(10)]
 
 
-# --- MODIFIED PREDICTION STRATEGY (v11 with new auto-entry logic) ---
+# --- MODIFIED PREDICTION STRATEGY (v12 - Enhanced Scoring and Positional Confidence) ---
 
 def predict_strategy(base_mains, bonus1, bonus2, historical_draws, target_size=4):
     """
-    Generates a 4-number prediction using a balanced, multi-pool approach.
-    This strategy uses a "committee of experts" where different analytical pools
-    "vote" on numbers. This is more resilient and better at capturing 2-3 number hits.
+    Generates a 4-number prediction ordered by confidence.
+    This strategy (v12) enhances the "committee of experts" model by incorporating more
+    analytical pools (like following numbers and recency weighting) and adjusting weights
+    to prioritize stronger indicators. The final prediction is NOT sorted numerically,
+    but by its internal score, reflecting the confidence level for each number.
     """
     if not historical_draws:
         return []
 
     scores = Counter()
 
-    # --- Pool 1: The Anchor Pool (High-Confidence Starters) ---
-    # This provides a deterministic, logical starting point based on the last draw.
-
-    # First auto entry number (NEW LOGIC: Sum of bonuses * 2)
+    # --- Pool 1: The Anchor Pool (High-Confidence, Strategy-Specific Starters) ---
+    # These are high-risk, high-reward numbers based on custom logic.
     calculated_auto_entry = (bonus1 + bonus2) * 2
     if 1 <= calculated_auto_entry <= 50:
         auto_entry_number = calculated_auto_entry
     else:
-        # Fallback if the number is out of the 1-50 range
         fallback_sum = bonus1 + bonus2
-        if 1 <= fallback_sum <= 50:
-            auto_entry_number = fallback_sum
-        else:
-            auto_entry_number = bonus1 # Final fallback if sum is also out of range
+        auto_entry_number = fallback_sum if 1 <= fallback_sum <= 50 else bonus1
 
-    # Second auto entry number based on user-provided lotto strategy pseudocode
-    lotto_strategy_number = 0  # Default value
+    lotto_strategy_number = bonus2  # Default fallback
     try:
         sum_mains = sum(base_mains)
-        decimal_bonus = float(f"{bonus1}.{bonus2}")
-        code = int(sum_mains + decimal_bonus)
+        code = int(sum_mains + float(f"{bonus1}.{bonus2}"))
         code_str = str(code)
-
         if len(code_str) >= 2:
-            first_part = int(code_str[:-1])
-            last_part = int(code_str[-1])
-            calculated_number = first_part - last_part
-            # A lotto number must be positive and within the 1-50 range.
+            calculated_number = int(code_str[:-1]) - int(code_str[-1])
             if 1 <= calculated_number <= 50:
                 lotto_strategy_number = calculated_number
-            else:
-                lotto_strategy_number = bonus1  # Fallback if out of range or non-positive
         elif len(code_str) == 1:
             lotto_strategy_number = int(code_str)
-        else:
-            lotto_strategy_number = bonus2  # Fallback
-
     except (ValueError, IndexError) as e:
         logging.error(f"Error calculating lotto_strategy_number: {e}")
-        lotto_strategy_number = bonus2  # Fallback to something simple
 
-    # The two auto-entry numbers now form the new anchor pool
     anchor_pool = {auto_entry_number, lotto_strategy_number}
-    
     for num in anchor_pool:
-        scores[num] += 3 # Heavy weight for our strongest candidates
+        scores[num] += 4 # Heavy weight for our core strategy candidates
 
-    # --- Pool 2: The Frequency & Trend Pool ---
-    # This pool looks at individual number behavior: hot streaks and overdue numbers.
-    hot_pool = get_hot_numbers(historical_draws, window=15, count=5)
-    overdue_pool = get_overdue_numbers(historical_draws, count=5)
-    
-    frequency_pool = set(hot_pool + overdue_pool)
-    for num in frequency_pool:
-        scores[num] += 1 # Standard weight for general trends
-
-    # --- Pool 3: The Relational Pool (How numbers play together) ---
+    # --- Pool 2: The Relational Pool (How numbers interact) ---
     # This is key for 3+ hits. It finds numbers that frequently appear together.
     strong_pair_pool = get_strongest_pairs(historical_draws, window=100, count=5)
     for num in strong_pair_pool:
-        scores[num] += 2 # Medium-high weight, as pairings are a strong indicator
+        scores[num] += 3 # High weight, as pairings are a very strong indicator
 
-    # --- Pool 4: The Bonus-Driven Pool ---
-    # Simple, direct candidates derived from the previous draw's bonus numbers.
+    # NEW: Find numbers that "follow" the previous draw's numbers.
+    following_pool = get_following_numbers_pool(base_mains, historical_draws)
+    for num in following_pool:
+        scores[num] += 2 # Medium-high weight for this strong sequential pattern
+
+    # --- Pool 3: The Frequency & Trend Pool ---
+    # This pool looks at individual number behavior.
+
+    # NEW: Use recency-weighted frequencies for a more nuanced view of "hot" numbers.
+    recency_scores = get_recency_weighted_frequencies(historical_draws)
+    for num, recency_score in recency_scores.items():
+        scores[num] += recency_score # Add the calculated weight directly
+
+    overdue_pool = get_overdue_numbers(historical_draws, count=5)
+    for num in overdue_pool:
+        scores[num] += 1.5 # Medium weight for numbers that are statistically "due"
+
+    # --- Pool 4: The Bonus-Driven & Speculative Pool ---
+    # Simple, direct candidates derived from bonuses or long-term cold streaks.
     bonus_hybrid_pool = set(super_hybrid_pool(bonus1) + super_hybrid_pool(bonus2))
     for num in bonus_hybrid_pool:
         scores[num] += 1 # Standard weight
 
+    # NEW: Consider cold numbers as potential long-shot candidates.
+    cold_pool = get_cold_numbers(historical_draws, window=40) # Use a larger window for "true" cold numbers
+    for num in cold_pool:
+        scores[num] += 0.5 # Low weight for speculative cold numbers
+
     # --- Final Selection ---
-    # Select the numbers that received the most "votes" from the different pools.
-    
-    # If there are no scores, return a fallback based on simple frequency
+    # Select the numbers with the most "votes", ordered by their final score.
+    # This directly addresses the request for the "first" number to be the most likely.
+
     if not scores:
-        return get_hot_numbers(historical_draws, window=20, count=target_size)
-        
-    # Get the top N candidates based on the final scores
+        # Fallback if no scores were generated at all
+        fallback_prediction = get_hot_numbers(historical_draws, window=20, count=target_size)
+        return sorted(fallback_prediction) # Sort fallback numerically as it has no score confidence
+
+    # Get the top N candidates based on the final scores. DO NOT sort numerically.
     final_candidates = [num for num, score in scores.most_common(target_size)]
     
-    return sorted(final_candidates)
+    # The list is now ordered by confidence score (highest first).
+    return final_candidates
 
 def generate_live_prediction(historical_draws):
     """
@@ -506,14 +504,14 @@ def generate_live_prediction(historical_draws):
     prediction = predict_strategy(base_mains, bonus1, bonus2, historical_draws[1:])
     
     return {
-        'strategy_used': 'dynamic_adaptive_scoring_v11',
+        'strategy_used': 'dynamic_adaptive_scoring_v12_confidence_ranked',
         'prediction': prediction
     }
 
 
 def backtest_strategy(draws_data):
     """
-    Performs a true backtest on historical data using the v11 model.
+    Performs a true backtest on historical data using the v12 model.
     """
     logging.debug(f"backtest_strategy received {len(draws_data)} draws for processing.")
     results = []
@@ -533,7 +531,7 @@ def backtest_strategy(draws_data):
         
         target_timestamp, target_mains, _, _, target_draw_type = target_actual_draw
         
-        # Generate the prediction using the v11 strategy.
+        # Generate the prediction using the v12 strategy.
         predicted_mains = predict_strategy(base_draw_mains, base_draw_b1, base_draw_b2, historical_data_for_prediction)
         
         hits = len(set(predicted_mains).intersection(set(target_mains)))
@@ -542,7 +540,7 @@ def backtest_strategy(draws_data):
             'target_draw_time': target_timestamp,
             'draw_date': target_timestamp.strftime('%Y-%m-%d'),
             'draw_type': target_draw_type,
-            'strategy_used': 'dynamic_adaptive_scoring_v11',
+            'strategy_used': 'dynamic_adaptive_scoring_v12_confidence_ranked',
             'bonus': [base_draw_b1, base_draw_b2],
             'prediction': predicted_mains,
             'actual_mains': target_mains,
